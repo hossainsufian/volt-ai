@@ -1773,6 +1773,51 @@ class DaemonThread(KeepAliveWorker):
                 print(error_msg, file=old_stderr)
 
 
+
+class _VoltBridge:
+    """Connects the Volt web chat to the running assistant."""
+
+    def __init__(self, tray: "JarvisSystemTray") -> None:
+        self._tray = tray
+
+    def is_available(self) -> bool:
+        return bool(self._tray.is_listening and self._tray._chat_submit_fn is not None)
+
+    def submit(self, text: str) -> bool:
+        fn = self._tray._chat_submit_fn
+        if fn is None:
+            return False
+        fn(text)
+        return True
+
+    def cancel(self) -> None:
+        fn = getattr(self._tray, "_chat_cancel_fn", None)
+        if fn is not None:
+            fn()
+
+    def restore(self, messages: list) -> None:
+        fn = getattr(self._tray, "_chat_control_fn", None)
+        if fn is not None:
+            fn("restore", {"messages": messages})
+
+
+def _forward_chat_event_to_volt(volt_web, line: str) -> None:
+    """Pass completed or busy chat events from the daemon to the web chat."""
+    import json as _json
+    from jarvis.daemon import CHAT_IPC_PREFIX
+    if not line.startswith(CHAT_IPC_PREFIX):
+        return
+    try:
+        payload = _json.loads(line[len(CHAT_IPC_PREFIX):])
+    except ValueError:
+        return
+    kind = payload.get("type")
+    if kind == "complete":
+        volt_web.on_reply(payload.get("data"))
+    elif kind == "busy":
+        volt_web.on_busy()
+
+
 class JarvisSystemTray:
     """System tray application for Jarvis voice assistant."""
 
@@ -1843,6 +1888,19 @@ class JarvisSystemTray:
         from desktop_app.chat_window import ChatIpcSignals
         self._chat_ipc_signals = ChatIpcSignals()
         self._chat_ipc_signals.line_received.connect(self._on_chat_ipc_line)
+
+        # Volt AI web chat: one chat app for this window and paired phones.
+        self.volt_window = None
+        self.volt_web = None
+        try:
+            from desktop_app.volt_store import VoltStore
+            from desktop_app.volt_web import VoltWebServer
+            self.volt_store = VoltStore()
+            self.volt_web = VoltWebServer(self.volt_store, _VoltBridge(self))
+            self.volt_web.start()
+        except Exception as exc:
+            debug_log(f"volt web chat failed to start: {exc}", "desktop")
+            print(f"⚠️ Volt AI chat server could not start: {exc}", flush=True)
 
         # Same bridge for the runtime-status dialog: the snapshot is
         # gathered on a worker thread because it makes a blocking network
@@ -2298,6 +2356,21 @@ class JarvisSystemTray:
         self.dictation_history_window.activateWindow()
 
     def show_chat(self) -> None:
+        """Show the Volt AI chat window (falls back to the classic chat)."""
+        if self.volt_web is not None:
+            try:
+                from desktop_app.volt_window import VoltChatWindow
+                if self.volt_window is None:
+                    self.volt_window = VoltChatWindow(self.volt_web.desktop_url())
+                self.volt_window.show()
+                self.volt_window.raise_()
+                self.volt_window.activateWindow()
+                return
+            except Exception as exc:
+                debug_log(f"volt chat window unavailable: {exc}", "desktop")
+        self.show_classic_chat()
+
+    def show_classic_chat(self) -> None:
         """Show the text chat window (created lazily on first open)."""
         if self.chat_window is None:
             from desktop_app.chat_window import ChatWindow
@@ -2698,13 +2771,14 @@ class JarvisSystemTray:
                     transcript, and a dead daemon has no memory to rewind.
                     """
                     import json as _json
-                    from jarvis.daemon import CHAT_REWIND_IPC_PREFIX
-                    if kind != "rewind":
+                    from jarvis.daemon import CHAT_REWIND_IPC_PREFIX, CHAT_RESTORE_IPC_PREFIX
+                    prefixes = {"rewind": CHAT_REWIND_IPC_PREFIX, "restore": CHAT_RESTORE_IPC_PREFIX}
+                    if kind not in prefixes:
                         debug_log(f"unknown chat control command: {kind}", "desktop")
                         return
                     try:
                         _proc.stdin.write(
-                            f"{CHAT_REWIND_IPC_PREFIX}{_json.dumps(payload)}\n"
+                            f"{prefixes[kind]}{_json.dumps(payload)}\n"
                         )
                         _proc.stdin.flush()
                     except Exception as exc:
@@ -2816,6 +2890,8 @@ class JarvisSystemTray:
         Creates the chat window lazily (safe on the GUI thread) and forwards
         the line to ``ChatWindow.process_ipc_line`` for parsing + signal emit.
         """
+        if self.volt_web is not None:
+            _forward_chat_event_to_volt(self.volt_web, line)
         if self.chat_window is None:
             from desktop_app.chat_window import ChatWindow
             self.chat_window = ChatWindow(
@@ -3828,7 +3904,8 @@ def main() -> int:
         # stop_daemon never change window visibility (the tray menu's
         # View Logs / Show Face actions are the only controls after this),
         # so the launch windows are opened here explicitly.
-        tray_instance.show_launch_windows()
+        # Volt AI opens only the chat at launch. Logs and the face stay
+        # available from the tray menu.
 
         # Volt AI: chat-first. Open the text chat window at launch unless the
         # user turned it off with "open_chat_on_start": false in config.json.

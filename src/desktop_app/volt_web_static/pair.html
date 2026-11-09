@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f6f3ec">
+  <title>Connect to Volt AI</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <main class="pair">
+    <form class="pair-card" id="pairForm">
+      <img src="/static/icon.svg" alt="" width="56" height="56">
+      <h1>Connect to Volt AI</h1>
+      <p>Enter the 6-digit pairing code shown in Volt AI's Settings on your laptop.</p>
+      <input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" placeholder="000000" aria-label="Pairing code" required>
+      <p class="pair-error" id="err" role="alert"></p>
+      <button class="primary" type="submit">Connect</button>
+    </form>
+  </main>
+  <script src="/static/pair.js"></script>
+</body>
+</html>

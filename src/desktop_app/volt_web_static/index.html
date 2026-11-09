@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f6f3ec">
+  <title>Volt AI</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/static/icon-192.png">
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <div class="app" id="app">
+    <aside class="sidebar" id="sidebar" aria-label="Chats">
+      <div class="brand">
+        <img src="/static/icon.svg" alt="" class="brand-mark">
+        <span class="brand-name">Volt AI</span>
+        <button class="icon-btn only-mobile" id="closeSidebar" aria-label="Close menu">✕</button>
+      </div>
+      <button class="new-chat" id="newChat"><span aria-hidden="true" class="plus">+</span> New chat</button>
+      <nav class="chat-list" id="chatList"></nav>
+      <div class="sidebar-foot">
+        <button class="foot-btn" id="openGallery"><span aria-hidden="true">🖼</span> Images</button>
+        <button class="foot-btn" id="openSettings"><span aria-hidden="true">⚙</span> Settings</button>
+      </div>
+    </aside>
+    <div class="scrim" id="scrim"></div>
+
+    <main class="main">
+      <header class="topbar">
+        <button class="icon-btn only-mobile" id="openSidebar" aria-label="Open menu">☰</button>
+        <h1 class="chat-title" id="chatTitle">Volt AI</h1>
+        <span class="status" id="status"></span>
+      </header>
+
+      <section class="thread" id="thread" aria-live="polite">
+        <div class="welcome" id="welcome">
+          <img src="/static/icon.svg" alt="" class="welcome-mark">
+          <h2 id="greeting">Good day</h2>
+          <p>How can I help you today?</p>
+          <div class="suggestions">
+            <button data-prompt="Help me plan my day">Plan my day</button>
+            <button data-prompt="Write a simple HTML page for a small shop">Build a web page</button>
+            <button data-prompt="Explain this error and how to fix it: ">Fix an error</button>
+            <button data-image="a lightning bolt logo, minimal, warm colours">Make an image</button>
+          </div>
+        </div>
+        <div class="messages" id="messages"></div>
+      </section>
+
+      <footer class="composer-wrap">
+        <form class="composer" id="composer">
+          <textarea id="input" rows="1" placeholder="Message Volt AI…" aria-label="Message Volt AI"></textarea>
+          <div class="composer-row">
+            <button type="button" class="chip" id="imageMode" aria-pressed="false" title="Create an image">🎨 Image</button>
+            <span class="spacer"></span>
+            <button type="button" class="stop" id="stopBtn" hidden aria-label="Stop">■</button>
+            <button type="submit" class="send" id="sendBtn" aria-label="Send">↑</button>
+          </div>
+        </form>
+        <p class="fineprint">Volt AI can make mistakes. Check important facts.</p>
+      </footer>
+    </main>
+  </div>
+
+  <dialog id="settings" class="sheet">
+    <form method="dialog" class="sheet-body">
+      <h2>Settings</h2>
+      <label class="toggle">
+        <input type="checkbox" id="setImages">
+        <span><strong>Create images</strong><br><small>Uses the free Pollinations.ai service. Your image descriptions are sent to their servers.</small></span>
+      </label>
+      <label class="toggle" id="phoneRow">
+        <input type="checkbox" id="setPhone">
+        <span><strong>Use Volt on my phone</strong><br><small>Phones on the same Wi-Fi can connect after entering a pairing code.</small></span>
+      </label>
+      <div class="phone-box" id="phoneBox" hidden>
+        <p>On your phone, open <b id="phoneUrl"></b></p>
+        <p>Pairing code: <b class="code" id="pairCode"></b></p>
+        <p><small>Tip: in your phone's browser menu choose <i>Add to Home screen</i> to install Volt AI like an app.</small></p>
+        <button type="button" class="link" id="forgetDevices">Disconnect all phones</button>
+      </div>
+      <div class="account" id="accountBox">
+        <h3>Backup to Google Drive</h3>
+        <p><small>Sign in with your Google account to keep your chats and images safe. If your computer is reset, sign in again and they come back.</small></p>
+        <p id="accountLine"></p>
+        <p class="backup-status" id="backupStatus"></p>
+        <div class="account-buttons">
+          <button type="button" class="primary" id="signIn">Sign in with Google</button>
+          <button type="button" class="ghost" id="backupNow" hidden>Back up now</button>
+          <button type="button" class="ghost" id="restoreNow" hidden>Restore</button>
+          <button type="button" class="link" id="signOut" hidden>Sign out</button>
+        </div>
+      </div>
+      <p class="laptop-only-note" id="laptopOnly" hidden><small>Settings can only be changed on the laptop.</small></p>
+      <menu><button class="primary" value="close">Done</button></menu>
+    </form>
+  </dialog>
+
+  <dialog id="gallery" class="sheet wide">
+    <form method="dialog" class="sheet-body">
+      <h2>Your images</h2>
+      <div class="gallery-grid" id="galleryGrid"></div>
+      <menu><button class="primary" value="close">Close</button></menu>
+    </form>
+  </dialog>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
