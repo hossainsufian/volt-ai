@@ -43,6 +43,15 @@ SUPPORTED_CHAT_MODELS: Dict[str, Dict[str, str]] = {
         "size": "~1.0GB",
         "vram": "2GB+",
     },
+    # Volt AI: a light model that runs on 8GB-RAM, CPU-only laptops without
+    # being killed for running out of memory.
+    "qwen2.5:3b": {
+        "openai_id": "Qwen/Qwen2.5-3B-Instruct",
+        "name": "Qwen 2.5 3B (8GB laptops)",
+        "description": "Good balance for CPU-only laptops with 8GB RAM; ~1.9GB download",
+        "size": "~1.9GB",
+        "vram": "4GB+",
+    },
 }
 
 # The quality-first chat default; setup adapts it to the memory budget.
@@ -55,7 +64,7 @@ SUPPORTED_OPENAI_EMBEDDING_MODEL_IDS = ("nomic-ai/nomic-embed-text-v1.5",)
 # provider an unset fast model resolves to the active chat model instead —
 # this pull-name only exists on Ollama.
 DEFAULT_FAST_MODEL = "gemma4:e2b"
-SUPPORTED_FAST_MODEL_IDS = ("qwen3.5:0.8b", "gemma4:e2b", "gemma4:e4b")
+SUPPORTED_FAST_MODEL_IDS = ("qwen3.5:0.8b", "qwen2.5:3b", "gemma4:e2b", "gemma4:e4b")
 
 
 def get_model_recommendations(provider: str) -> dict[str, tuple[str, ...]]:
@@ -196,6 +205,7 @@ class Settings:
     hot_window_enabled: bool
     hot_window_seconds: float
     low_power_mode: bool
+    open_chat_on_start: bool
 
     # Echo Detection
     echo_energy_threshold: float
@@ -570,12 +580,12 @@ def get_default_config() -> Dict[str, Any]:
         "voice_max_collect_seconds": 180.0,
 
         # Wake Word Detection
-        "wake_word": "jarvis",
-        "wake_aliases": ["joris", "charis", "chavis", "jar is", "jaivis", "jervis", "jarvus", "jarviz", "javis", "jairus", "jarryst", "chyrus"],
+        "wake_word": "volt",
+        "wake_aliases": ["volts", "vault", "bolt", "voltai", "volt ai", "walt", "vault ai", "bolt ai", "volte"],
         "wake_fuzzy_ratio": 0.78,
 
         # Whisper Speech Recognition
-        "whisper_model": "medium",
+        "whisper_model": "small",
         "whisper_backend": "auto",  # "auto" (MLX on Apple Silicon, else faster-whisper), "mlx", or "faster-whisper"
         "whisper_device": "auto",  # "cuda" (recommended if available), "auto", or "cpu" (only for faster-whisper)
         "whisper_compute_type": "int8",
@@ -597,6 +607,7 @@ def get_default_config() -> Dict[str, Any]:
         "hot_window_enabled": True,
         "hot_window_seconds": 3.0,
         "low_power_mode": False,
+        "open_chat_on_start": True,  # Volt AI: open the chat window at launch
         "echo_energy_threshold": 2.0,
         "echo_tolerance": 0.3,  # Time tolerance for echo detection timing
 
@@ -783,7 +794,7 @@ def load_settings() -> Settings:
     voice_device = None if voice_device_val in (None, "", "default", "system") else str(voice_device_val)
     voice_collect_seconds = float(merged.get("voice_collect_seconds", 2.5))
     voice_max_collect_seconds = float(merged.get("voice_max_collect_seconds", 60.0))
-    wake_word = str(merged.get("wake_word", "jarvis")).strip().lower()
+    wake_word = str(merged.get("wake_word", "volt")).strip().lower()
     wake_aliases = [a.strip().lower() for a in _ensure_list(merged.get("wake_aliases")) if a.strip()]
     wake_fuzzy_ratio = float(merged.get("wake_fuzzy_ratio", 0.78))
     whisper_model = _expand_model_reference(merged.get("whisper_model")) or "medium"
@@ -807,6 +818,7 @@ def load_settings() -> Settings:
     hot_window_enabled = bool(merged.get("hot_window_enabled", True))
     hot_window_seconds = float(merged.get("hot_window_seconds", 3.0))
     low_power_mode = bool(merged.get("low_power_mode", False))
+    open_chat_on_start = bool(merged.get("open_chat_on_start", True))
     echo_energy_threshold = float(merged.get("echo_energy_threshold", 2.0))
     echo_tolerance = float(merged.get("echo_tolerance", 0.3))
 
@@ -969,6 +981,7 @@ def load_settings() -> Settings:
         hot_window_enabled=hot_window_enabled,
         hot_window_seconds=hot_window_seconds,
         low_power_mode=low_power_mode,
+        open_chat_on_start=open_chat_on_start,
         echo_energy_threshold=echo_energy_threshold,
         echo_tolerance=echo_tolerance,
         # Fast tier (voice intent, tool routing, quick classifications)

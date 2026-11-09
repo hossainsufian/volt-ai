@@ -163,7 +163,7 @@ def _collect_runtime_status_snapshot(
 
     ownership = ollama_runtime_ownership or OllamaRuntimeOwnership()
     if ownership.started_by_jarvis and not ownership.stopped:
-        ollama_owner = "Jarvis"
+        ollama_owner = "Volt AI"
     elif ollama_running:
         ollama_owner = "External"
     else:
@@ -284,7 +284,7 @@ class RuntimeStatusDialog(QDialog):
                     layout.addSpacing(8)
                 header = QLabel(section)
                 header.setStyleSheet(
-                    "color: #fbbf24; font-weight: bold; font-size: 13px;"
+                    "color: #67e8f9; font-weight: bold; font-size: 13px;"
                 )
                 layout.addWidget(header)
                 current_section = section
@@ -752,7 +752,7 @@ def show_crash_report_dialog(crash_content: str) -> None:
             def __init__(self, crash_info: str):
                 super().__init__()
                 self.crash_info = crash_info
-                self.setWindowTitle("🐛 Jarvis Crash Report")
+                self.setWindowTitle("🐛 Volt AI Crash Report")
                 self.setMinimumSize(600, 450)
                 self.setStyleSheet(JARVIS_THEME_STYLESHEET)
                 self._setup_ui()
@@ -762,7 +762,7 @@ def show_crash_report_dialog(crash_content: str) -> None:
                 layout.setSpacing(16)
 
                 # Header
-                header = QLabel("😵 Jarvis crashed in the previous session")
+                header = QLabel("😵 Volt AI crashed in the previous session")
                 header.setStyleSheet("font-size: 18px; font-weight: bold; color: #f87171;")
                 layout.addWidget(header)
 
@@ -930,7 +930,7 @@ class UnsupportedModelDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.setSpacing(16)
         layout.setContentsMargins(24, 24, 24, 24)
-        header = QLabel("Your models are outside Jarvis's recommended list")
+        header = QLabel("Your models are outside Volt AI's recommended list")
         header.setWordWrap(True)
         layout.addWidget(header)
         lines = [
@@ -1055,8 +1055,8 @@ def show_instance_conflict_dialog() -> bool:
     from PyQt6.QtGui import QIcon
 
     msg = QMessageBox()
-    msg.setWindowTitle("Jarvis Already Running")
-    msg.setText("Another instance of Jarvis is already running.")
+    msg.setWindowTitle("Volt AI Already Running")
+    msg.setText("Another instance of Volt AI is already running.")
     msg.setInformativeText("Would you like to close the existing instance and start a new one?")
     msg.setIcon(QMessageBox.Icon.Question)
 
@@ -1162,7 +1162,7 @@ class LogViewerWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("📝 Jarvis Logs")
+        self.setWindowTitle("📝 Volt AI Logs")
         self.setGeometry(100, 100, 900, 650)
 
         # Apply theme
@@ -1187,9 +1187,9 @@ class LogViewerWindow(QMainWindow):
         title_layout.setContentsMargins(0, 0, 0, 0)
         title_layout.setSpacing(4)
 
-        title = QLabel("📝 Jarvis Logs")
+        title = QLabel("📝 Volt AI Logs")
         title.setObjectName("title")
-        title.setStyleSheet("font-size: 20px; font-weight: 600; color: #fbbf24;")
+        title.setStyleSheet("font-size: 20px; font-weight: 600; color: #67e8f9;")
         title_layout.addWidget(title)
 
         subtitle = QLabel("Activity timeline · downloads stay visible above the log")
@@ -1213,7 +1213,7 @@ class LogViewerWindow(QMainWindow):
             }
             QPushButton:hover {
                 background-color: #3f3f46;
-                border-color: #f59e0b;
+                border-color: #22d3ee;
             }
         """)
         clear_btn.clicked.connect(self.clear_logs)
@@ -1233,7 +1233,7 @@ class LogViewerWindow(QMainWindow):
             }
             QPushButton:hover {
                 background-color: #3f3f46;
-                border-color: #f59e0b;
+                border-color: #22d3ee;
             }
         """)
         report_btn.clicked.connect(self._report_issue)
@@ -1421,7 +1421,7 @@ class MemoryViewerWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("🧠 Jarvis Memory")
+        self.setWindowTitle("🧠 Volt AI Memory")
         self.setGeometry(150, 150, 1200, 900)
 
         # Apply theme
@@ -1652,7 +1652,7 @@ class MemoryViewerWindow(QMainWindow):
                        height: 100vh; margin: 0; }}
                 .error {{ text-align: center; padding: 40px; }}
                 .icon {{ font-size: 64px; margin-bottom: 20px; }}
-                h1 {{ color: #fbbf24; margin-bottom: 16px; }}
+                h1 {{ color: #67e8f9; margin-bottom: 16px; }}
                 p {{ color: #71717a; max-width: 400px; line-height: 1.6; }}
             </style></head>
             <body><div class="error">
@@ -1665,7 +1665,7 @@ class MemoryViewerWindow(QMainWindow):
             self.web_view.setHtml(error_html)
         else:
             from PyQt6.QtWidgets import QMessageBox
-            QMessageBox.warning(None, "🧠 Jarvis Memory", message)
+            QMessageBox.warning(None, "🧠 Volt AI Memory", message)
 
     def showEvent(self, event) -> None:
         """Called when window is shown."""
@@ -1739,7 +1739,7 @@ class DaemonThread(KeepAliveWorker):
             try:
                 # Import and run the daemon
                 from jarvis.daemon import main as daemon_main
-                self.log_signals.new_log.emit("🚀 Jarvis daemon started\n")
+                self.log_signals.new_log.emit("🚀 Volt AI daemon started\n")
                 self.log_signals.new_log.emit("📋 Initializing daemon components...\n")
 
                 # Run daemon - this should run the main loop
@@ -2053,7 +2053,7 @@ class JarvisSystemTray:
             "Reinstall GPU libraries",
             (
                 "This will download cuBLAS and cuDNN (~1.1 GB) and install them "
-                "into the Jarvis program folder. You'll see a UAC prompt. "
+                "into the Volt AI program folder. You'll see a UAC prompt. "
                 "Continue?"
             ),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
@@ -2079,7 +2079,7 @@ class JarvisSystemTray:
             "Reinstall GPU libraries",
             (
                 "The CUDA installer is running. Once it finishes, restart "
-                f"Jarvis to use GPU acceleration. See {action_spec.target_dir / 'install.log'} "
+                f"Volt AI to use GPU acceleration. See {action_spec.target_dir / 'install.log'} "
                 "for details."
             ),
         )
@@ -2121,7 +2121,7 @@ class JarvisSystemTray:
         if result == QDialog.DialogCode.Accepted and self.is_listening:
             reply = QMessageBox.question(
                 None, "🔄 Restart?",
-                "Settings saved. Restart Jarvis now to apply changes?",
+                "Settings saved. Restart Volt AI now to apply changes?",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.Yes,
             )
@@ -2265,7 +2265,7 @@ class JarvisSystemTray:
             from jarvis.daemon import submit_task
             return submit_task(prompt)
         if self.daemon_process is None or self.daemon_process.stdin is None:
-            raise RuntimeError("Start Jarvis before submitting a task")
+            raise RuntimeError("Start Volt AI before submitting a task")
         import json
         self.daemon_process.stdin.write(
             f"TASK:{json.dumps({'action': 'submit', 'prompt': prompt, 'request_id': request_id}, ensure_ascii=False)}\n"
@@ -2279,7 +2279,7 @@ class JarvisSystemTray:
             from jarvis.daemon import cancel_task
             return cancel_task(task_id)
         if self.daemon_process is None or self.daemon_process.stdin is None:
-            raise RuntimeError("Start Jarvis before cancelling a task")
+            raise RuntimeError("Start Volt AI before cancelling a task")
         import json
         self.daemon_process.stdin.write(
             f"TASK:{json.dumps({'action': 'cancel', 'id': task_id})}\n"
@@ -2513,7 +2513,7 @@ class JarvisSystemTray:
                 self.daemon_process.stdin.flush()
         except Exception as exc:
             debug_log(f"voice pause control failed ({type(exc).__name__})", "desktop")
-            self._voice_pause_unknown("Voice listening could not confirm the change. Try again or restart Jarvis.")
+            self._voice_pause_unknown("Voice listening could not confirm the change. Try again or restart Volt AI.")
 
     def _on_voice_pause_status(self, owner, line: str) -> None:
         import json
@@ -2537,7 +2537,7 @@ class JarvisSystemTray:
                 or not isinstance(status.get('available'), bool)):
             return
         if not status['available']:
-            self._voice_pause_unknown("Voice listening is unavailable. Try again after startup or restart Jarvis.")
+            self._voice_pause_unknown("Voice listening is unavailable. Try again after startup or restart Volt AI.")
             return
         if not isinstance(status.get('paused'), bool):
             return
@@ -2547,7 +2547,7 @@ class JarvisSystemTray:
         self.voice_pause_action.setText("▶️ Resume Voice Listening" if status['paused'] else "⏸️ Pause Voice Listening")
         self.voice_pause_action.setEnabled(True)
         self.status_action.setText("🟠 Status: Voice paused (chat available)" if status['paused'] else "🟢 Status: Listening")
-        self.tray_icon.setToolTip("Jarvis: voice paused" if status['paused'] else "Jarvis: listening")
+        self.tray_icon.setToolTip("Volt AI: voice paused" if status['paused'] else "Volt AI: listening")
         self.log_signals.new_log.emit("⏸️ Voice listening paused. Text chat and dictation remain available.\n"
                                       if status['paused'] else "🎤 Voice listening resumed.\n")
         debug_log(f"voice pause confirmed: {status['paused']}", "desktop")
@@ -2559,12 +2559,12 @@ class JarvisSystemTray:
         self.voice_pause_action.setText("⏸️ Pause Voice Listening")
         self.voice_pause_action.setEnabled(self.is_listening and not self._daemon_stop_expected)
         self.status_action.setText("⚠️ Status: Voice state unknown")
-        self.tray_icon.setToolTip("Jarvis: voice state unknown")
+        self.tray_icon.setToolTip("Volt AI: voice state unknown")
         self.log_signals.new_log.emit(f"⚠️ {message}\n")
 
     def _voice_pause_timed_out(self) -> None:
         if self._voice_pause_request_id is not None:
-            self._voice_pause_unknown("Voice listening did not confirm the change. Try again or restart Jarvis.")
+            self._voice_pause_unknown("Voice listening did not confirm the change. Try again or restart Volt AI.")
 
     def toggle_listening(self) -> None:
         """Toggle the Jarvis daemon on/off."""
@@ -2592,7 +2592,7 @@ class JarvisSystemTray:
                     "⚠️ The previous daemon is still shutting down. Wait for it to finish before starting again.\n"
                 )
             else:
-                self.log_signals.new_log.emit("ℹ️ Jarvis is already running.\n")
+                self.log_signals.new_log.emit("ℹ️ Volt AI is already running.\n")
             debug_log("start_daemon ignored: a daemon is still alive", "desktop")
             return
         self._daemon_stuck = False
@@ -2728,7 +2728,7 @@ class JarvisSystemTray:
                 )
                 log_thread.start()
                 self.log_reader_threads.append(log_thread)
-                self.log_signals.new_log.emit("🚀 Jarvis daemon started\n")
+                self.log_signals.new_log.emit("🚀 Volt AI daemon started\n")
 
             self.is_listening = True
             self.toggle_action.setText("⏻ Turn Off")
@@ -2737,7 +2737,7 @@ class JarvisSystemTray:
             self._set_chat_daemon_status("running")
 
             self.tray_icon.showMessage(
-                "Jarvis Started",
+                "Volt AI Started",
                 "Voice assistant is now listening",
                 QSystemTrayIcon.MessageIcon.Information,
                 2000
@@ -2751,7 +2751,7 @@ class JarvisSystemTray:
             self._set_chat_daemon_status("crashed")
             self.log_signals.new_log.emit(f"❌ Failed to start: {str(e)}\n{traceback.format_exc()}\n")
             self.tray_icon.showMessage(
-                "Error Starting Jarvis",
+                "Error Starting Volt AI",
                 f"Failed to start: {str(e)}",
                 QSystemTrayIcon.MessageIcon.Critical,
                 3000
@@ -2856,7 +2856,7 @@ class JarvisSystemTray:
             if self.is_bundled and worker:
                 # When running in a QThread, use the stop flag for graceful shutdown
                 # This ensures the daemon's finally block runs (for diary update)
-                self.log_signals.new_log.emit("⏸️ Stopping Jarvis daemon...\n")
+                self.log_signals.new_log.emit("⏸️ Stopping Volt AI daemon...\n")
 
                 # Show diary update dialog for bundled app
                 if show_diary_dialog:
@@ -3071,13 +3071,13 @@ class JarvisSystemTray:
             self._set_face_asleep()
 
             self.tray_icon.showMessage(
-                "Jarvis Stopped",
+                "Volt AI Stopped",
                 "Voice assistant is no longer listening",
                 QSystemTrayIcon.MessageIcon.Information,
                 2000
             )
 
-            self.log_signals.new_log.emit("⏸️ Jarvis daemon stopped\n")
+            self.log_signals.new_log.emit("⏸️ Volt AI daemon stopped\n")
             debug_log("daemon stopped from desktop app", "desktop")
 
         except Exception as e:
@@ -3099,7 +3099,7 @@ class JarvisSystemTray:
                 self._on_daemon_finished(worker)
                 if unexpected:
                     self.tray_icon.showMessage(
-                        "Jarvis Stopped",
+                        "Volt AI Stopped",
                         "Voice assistant process ended unexpectedly",
                         QSystemTrayIcon.MessageIcon.Warning,
                         3000
@@ -3122,7 +3122,7 @@ class JarvisSystemTray:
                     self._set_face_asleep()
 
                     self.tray_icon.showMessage(
-                        "Jarvis Stopped",
+                        "Volt AI Stopped",
                         "Voice assistant process ended unexpectedly",
                         QSystemTrayIcon.MessageIcon.Warning,
                         3000
@@ -3193,7 +3193,7 @@ def _build_unreachable_message(cfg) -> str:
     return (
         f"⚠️ Jarvis couldn't reach a ready LLM server at {base}.\n\n"
         "Make sure your local server (for example LM Studio, Ollama, llama.cpp, "
-        "vLLM) is running with a model loaded, and Jarvis will connect "
+        "vLLM) is running with a model loaded, and Volt AI will connect "
         "automatically.\n\n"
         "You can open the Setup Wizard to change your server, or close and "
         "adjust Settings later via the tray menu \u2192 LLM Provider."
@@ -3205,7 +3205,7 @@ def _show_openai_unreachable_dialog(cfg, splash: QWidget) -> None:
     from PyQt6.QtWidgets import QMessageBox
 
     dialog = QMessageBox()
-    dialog.setWindowTitle("Jarvis")
+    dialog.setWindowTitle("Volt AI")
     dialog.setText(_build_unreachable_message(cfg))
     dialog.setIcon(QMessageBox.Icon.Warning)
     open_wizard_btn = dialog.addButton("🔧 Open Setup Wizard", QMessageBox.ButtonRole.ActionRole)
@@ -3397,7 +3397,7 @@ def main() -> int:
     # Single-instance check
     # This prevents multiple tray icons and log windows from spawning
     if not acquire_single_instance_lock():
-        print("⚠️ Another instance of Jarvis Desktop is already running.", flush=True)
+        print("⚠️ Another instance of Volt AI Desktop is already running.", flush=True)
 
         # Create a minimal QApplication for the dialog
         from PyQt6.QtWidgets import QApplication
@@ -3446,7 +3446,7 @@ def main() -> int:
     # Register clean exit handler
     atexit.register(mark_session_clean_exit)
 
-    print("Starting Jarvis Desktop App...", flush=True)
+    print("Starting Volt AI Desktop App...", flush=True)
     print(f"Python executable: {sys.executable}", flush=True)
     print(f"Working directory: {os.getcwd()}", flush=True)
     print(f"__file__: {__file__}", flush=True)
@@ -3802,17 +3802,14 @@ def main() -> int:
                 splash.hide()
                 roles = ", ".join(unlisted_models)
                 print(f"⚠️ Models outside the recommended list: {roles}", flush=True)
-                debug_log(f"Model recommendation advice shown for {roles}", "desktop")
-                if show_unsupported_model_dialog(unlisted_models, _provider_cfg):
-                    print("🔧 Opening setup wizard to change models...", flush=True)
-                    if not _run_setup_wizard():
-                        print("⚠️ Setup wizard cancelled, exiting", flush=True)
-                        return 0
+                # Volt AI: advice only. A blocking dialog here stopped startup
+                # until answered and quit the app if the wizard was cancelled.
+                debug_log(f"Model recommendation advice logged for {roles}", "desktop")
                 splash.show()
                 splash.set_status("Model check complete!")
                 app.processEvents()
 
-        splash.set_status("Loading Jarvis...")
+        splash.set_status("Loading Volt AI...")
         print("Initializing JarvisSystemTray...", flush=True)
         tray_instance = JarvisSystemTray(
             ollama_runtime_ownership=ollama_runtime_ownership,
@@ -3821,7 +3818,7 @@ def main() -> int:
 
         # Always auto-start listening
         splash.set_status("Starting voice assistant...")
-        print("🚀 Auto-starting Jarvis listener...", flush=True)
+        print("🚀 Auto-starting Volt AI listener...", flush=True)
         tray_instance.start_daemon()
 
         # Close splash screen
@@ -3833,11 +3830,20 @@ def main() -> int:
         # so the launch windows are opened here explicitly.
         tray_instance.show_launch_windows()
 
+        # Volt AI: chat-first. Open the text chat window at launch unless the
+        # user turned it off with "open_chat_on_start": false in config.json.
+        try:
+            from jarvis.config import load_settings as _load_chat_settings
+            if getattr(_load_chat_settings(), "open_chat_on_start", True):
+                tray_instance.show_chat()
+        except Exception as exc:
+            debug_log(f"could not open chat at launch: {exc}", "desktop")
+
         if crash_log_file:
             # Show notification with log file location
             from PyQt6.QtWidgets import QSystemTrayIcon
             tray_instance.tray_icon.showMessage(
-                "Jarvis Started",
+                "Volt AI Started",
                 f"Crash logs available at:\n{crash_log_file}",
                 QSystemTrayIcon.MessageIcon.Information,
                 3000
@@ -3858,8 +3864,8 @@ def main() -> int:
 
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Icon.Critical)
-            msg.setWindowTitle("Jarvis Desktop App Error")
-            msg.setText("Failed to start Jarvis Desktop App")
+            msg.setWindowTitle("Volt AI Desktop App Error")
+            msg.setText("Failed to start Volt AI Desktop App")
             msg.setDetailedText(str(e) + "\n\n" + traceback.format_exc())
             if crash_log_file:
                 msg.setInformativeText(f"Check log file at:\n{crash_log_file}")

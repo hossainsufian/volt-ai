@@ -22,7 +22,7 @@ import sys as _sys
 
 if _sys.version_info < (3, 11):
     raise SystemExit(
-        "⚠️ Python 3.11 or later is required to run Jarvis. "
+        "⚠️ Python 3.11 or later is required to run Volt AI. "
         "Install a supported Python and recreate your source environment."
     )
 

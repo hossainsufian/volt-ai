@@ -512,7 +512,7 @@ class ScrollableWizardPage(QWizardPage):
         header = QHBoxLayout()
         if has_scroll and layout.contentsMargins().left() == 0:
             header.setContentsMargins(28, 20, 28, 0)
-        brand = QLabel("J A R V I S   /   SETUP")
+        brand = QLabel("V O L T  A I   /   SETUP")
         brand.setObjectName("setupBrand")
         header.addWidget(brand)
         header.addStretch()
@@ -544,7 +544,7 @@ class SetupWizard(QWizard):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("🚀 Jarvis Setup Wizard")
+        self.setWindowTitle("🚀 Volt AI Setup Wizard")
         self.setWizardStyle(QWizard.WizardStyle.ModernStyle)
         available = self.screen().availableGeometry()
         self.setMinimumSize(min(700, available.width() - 40),
@@ -589,7 +589,7 @@ class SetupWizard(QWizard):
         # Custom button labels
         self.setButtonText(QWizard.WizardButton.NextButton, "Next →")
         self.setButtonText(QWizard.WizardButton.BackButton, "← Back")
-        self.setButtonText(QWizard.WizardButton.FinishButton, "🎉 Start Jarvis")
+        self.setButtonText(QWizard.WizardButton.FinishButton, "🎉 Start Volt AI")
         self.setButtonText(QWizard.WizardButton.CancelButton, "Exit")
         self.setButtonLayout([
             QWizard.WizardButton.CancelButton, QWizard.WizardButton.Stretch,
@@ -642,7 +642,7 @@ class SetupWizard(QWizard):
         self.setStyleSheet(JARVIS_THEME_STYLESHEET + icon_css + """
             /* Additional wizard-specific overrides */
             QLabel#title {
-                color: #fbbf24;
+                color: #67e8f9;
                 font-size: 24px;
                 font-weight: bold;
             }
@@ -655,7 +655,7 @@ class SetupWizard(QWizard):
                 font-size: 14px;
             }
             QLabel#status-warning {
-                color: #fbbf24;
+                color: #67e8f9;
                 font-size: 14px;
             }
             QLabel#status-error {
@@ -668,8 +668,8 @@ class SetupWizard(QWizard):
             }
             QPushButton#secondary:hover {
                 background-color: #1e222c;
-                border-color: #f59e0b;
-                color: #fbbf24;
+                border-color: #22d3ee;
+                color: #67e8f9;
             }
             QPushButton#success {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
@@ -698,7 +698,7 @@ class WelcomePage(ScrollableWizardPage):
         # Header
         header_layout = QVBoxLayout()
 
-        title = QLabel("Welcome to your Jarvis")
+        title = QLabel("Welcome to your Volt AI")
         title.setObjectName("title")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         header_layout.addWidget(title)
@@ -799,7 +799,7 @@ class WelcomePage(ScrollableWizardPage):
             if is_success:
                 status_label.setStyleSheet("font-size: 14px; color: #4ade80; background: transparent;")
             else:
-                status_label.setStyleSheet("font-size: 14px; color: #fbbf24; background: transparent;")
+                status_label.setStyleSheet("font-size: 14px; color: #67e8f9; background: transparent;")
 
     def initializePage(self):
         """Called when page is shown."""
@@ -924,7 +924,7 @@ class ProviderChoicePage(ScrollableWizardPage):
         layout.addWidget(title)
 
         subtitle = QLabel(
-            "Two ways to run Jarvis. Your models stay on hardware you control."
+            "Two ways to run Volt AI. Your models stay on hardware you control."
         )
         subtitle.setObjectName("subtitle")
         subtitle.setWordWrap(True)
@@ -955,7 +955,7 @@ class ProviderChoicePage(ScrollableWizardPage):
         self._button_group.addButton(self._openai_radio)
         openai_card = self._provider_card(
             self._openai_radio,
-            "Point Jarvis at a server that speaks the OpenAI API. This is "
+            "Point Volt AI at a server that speaks the OpenAI API. This is "
             "usually another local app (LM Studio, oMLX, llama.cpp, vLLM, "
             "LocalAI) running on your own machine or network. You provide its "
             "URL and model name on the next step.",
@@ -1150,7 +1150,7 @@ class OpenAICompatiblePage(ScrollableWizardPage):
         layout.addWidget(title)
 
         subtitle = QLabel(
-            "Choose your local server, then select the models Jarvis will use."
+            "Choose your local server, then select the models Volt AI will use."
         )
         subtitle.setObjectName("subtitle")
         subtitle.setWordWrap(True)
@@ -1338,9 +1338,9 @@ class OpenAICompatiblePage(ScrollableWizardPage):
         )
         tip.setWordWrap(True)
         tip.setStyleSheet(
-            "background: rgba(245, 158, 11, 0.10);"
-            "border: 1px solid rgba(245, 158, 11, 0.25);"
-            "border-radius: 8px; padding: 12px 16px; color: #fbbf24; font-size: 13px;"
+            "background: rgba(34, 211, 238, 0.10);"
+            "border: 1px solid rgba(34, 211, 238, 0.25);"
+            "border-radius: 8px; padding: 12px 16px; color: #67e8f9; font-size: 13px;"
         )
         layout.addWidget(tip)
 
@@ -1804,7 +1804,7 @@ class OllamaInstallPage(ScrollableWizardPage):
         title.setObjectName("title")
         layout.addWidget(title)
 
-        subtitle = QLabel("Ollama is required to run local AI models for Jarvis.")
+        subtitle = QLabel("Ollama is required to run local AI models for Volt AI.")
         subtitle.setObjectName("subtitle")
         subtitle.setWordWrap(True)
         layout.addWidget(subtitle)
@@ -1819,7 +1819,7 @@ class OllamaInstallPage(ScrollableWizardPage):
         card_layout.setSpacing(12)
 
         instructions_title = QLabel("📥 Installation Instructions")
-        instructions_title.setStyleSheet("font-size: 16px; font-weight: bold; color: #fbbf24;")
+        instructions_title.setStyleSheet("font-size: 16px; font-weight: bold; color: #67e8f9;")
         card_layout.addWidget(instructions_title)
         card_layout.addSpacing(8)
 
@@ -1947,7 +1947,7 @@ class OllamaServerPage(ScrollableWizardPage):
         title.setObjectName("title")
         layout.addWidget(title)
 
-        subtitle = QLabel("The Ollama server needs to be running for Jarvis to use AI models.")
+        subtitle = QLabel("The Ollama server needs to be running for Volt AI to use AI models.")
         subtitle.setObjectName("subtitle")
         subtitle.setWordWrap(True)
         layout.addWidget(subtitle)
@@ -1962,7 +1962,7 @@ class OllamaServerPage(ScrollableWizardPage):
         card_layout.setSpacing(12)
 
         instructions_title = QLabel("🚀 Starting the Server")
-        instructions_title.setStyleSheet("font-size: 16px; font-weight: bold; color: #fbbf24;")
+        instructions_title.setStyleSheet("font-size: 16px; font-weight: bold; color: #67e8f9;")
         card_layout.addWidget(instructions_title)
         card_layout.addSpacing(8)
 
@@ -2170,7 +2170,7 @@ class ModelsPage(ScrollableWizardPage):
         layout.addWidget(title)
 
         subtitle = QLabel(
-            "Jarvis needs a chat model (conversations) and a fast model "
+            "Volt AI needs a chat model (conversations) and a fast model "
             "(voice intent, tool routing). Pick them separately for "
             "best VRAM usage."
         )
@@ -2209,7 +2209,7 @@ class ModelsPage(ScrollableWizardPage):
 
         # Chat model dropdown
         chat_label = QLabel("🎯 Chat Model (conversations)")
-        chat_label.setStyleSheet("font-size: 15px; font-weight: bold; color: #fbbf24;")
+        chat_label.setStyleSheet("font-size: 15px; font-weight: bold; color: #67e8f9;")
         card_layout.addWidget(chat_label)
 
         self._chat_combo = QComboBox()
@@ -2266,7 +2266,7 @@ class ModelsPage(ScrollableWizardPage):
         cl.setContentsMargins(18, 16, 18, 16)
         cl.setSpacing(12)
         mt = QLabel("📦 Required Models")
-        mt.setStyleSheet("font-size: 16px; font-weight: bold; color: #fbbf24;")
+        mt.setStyleSheet("font-size: 16px; font-weight: bold; color: #67e8f9;")
         cl.addWidget(mt)
         cl.addSpacing(8)
         self.models_label = QLabel("Loading...")
@@ -2516,7 +2516,7 @@ class ModelsPage(ScrollableWizardPage):
     def _install_models(self):
         if not self._save_model_to_config():
             self.status_label.setText("Could not save model selection. Continuing...")
-            self.status_label.setStyleSheet("color: #fbbf24;")
+            self.status_label.setStyleSheet("color: #67e8f9;")
         if not self._missing_models:
             self._is_complete = True
             self.completeChanged.emit()
@@ -2572,8 +2572,8 @@ class ModelsPage(ScrollableWizardPage):
 
     def _skip_models(self):
         self._is_complete = True
-        self.status_label.setText("Skipped model installation. Jarvis may not work correctly.")
-        self.status_label.setStyleSheet("color: #fbbf24;")
+        self.status_label.setText("Skipped model installation. Volt AI may not work correctly.")
+        self.status_label.setStyleSheet("color: #67e8f9;")
         self.completeChanged.emit()
 
     def isComplete(self):
@@ -2646,12 +2646,12 @@ class WhisperSetupPage(ScrollableWizardPage):
 
         # Header - different text based on platform
         if self._is_apple_silicon:
-            title = QLabel("Let Jarvis hear you")
+            title = QLabel("Let Volt AI hear you")
             subtitle_text = (
                 "GPU-accelerated speech recognition. Choose language and model size."
             )
         else:
-            title = QLabel("Let Jarvis hear you")
+            title = QLabel("Let Volt AI hear you")
             subtitle_text = "Choose language mode and model size for speech recognition."
 
         title.setObjectName("title")
@@ -2699,13 +2699,13 @@ class WhisperSetupPage(ScrollableWizardPage):
                 font-size: 12px;
             }
             QPushButton:hover {
-                border-color: #f59e0b;
+                border-color: #22d3ee;
                 background: #1e222c;
             }
             QPushButton:checked {
-                border-color: #f59e0b;
-                background: rgba(245, 158, 11, 0.15);
-                color: #fbbf24;
+                border-color: #22d3ee;
+                background: rgba(34, 211, 238, 0.15);
+                color: #67e8f9;
             }
         """
         self._english_btn.setStyleSheet(lang_btn_style)
@@ -2765,7 +2765,7 @@ class WhisperSetupPage(ScrollableWizardPage):
                 margin: 0;
             }
             QSlider::handle:horizontal {
-                background: #f59e0b;
+                background: #22d3ee;
                 border: none;
                 width: 16px;
                 height: 16px;
@@ -2773,10 +2773,10 @@ class WhisperSetupPage(ScrollableWizardPage):
                 border-radius: 8px;
             }
             QSlider::handle:horizontal:hover {
-                background: #fbbf24;
+                background: #67e8f9;
             }
             QSlider::sub-page:horizontal {
-                background: rgba(245, 158, 11, 0.4);
+                background: rgba(34, 211, 238, 0.4);
                 border-radius: 2px;
             }
             QSlider::tick-mark {
@@ -3057,7 +3057,7 @@ class WhisperSetupPage(ScrollableWizardPage):
             if is_success:
                 status_label.setStyleSheet("font-size: 12px; color: #4ade80; background: transparent;")
             else:
-                status_label.setStyleSheet("font-size: 12px; color: #fbbf24; background: transparent;")
+                status_label.setStyleSheet("font-size: 12px; color: #67e8f9; background: transparent;")
 
     def _save_whisper_model_to_config(self):
         """Save the selected whisper model to config file."""
@@ -3273,11 +3273,11 @@ class LocationPage(ScrollableWizardPage):
         layout.setContentsMargins(28, 20, 28, 20)
 
         # Header
-        title = QLabel("Make Jarvis feel at home")
+        title = QLabel("Make Volt AI feel at home")
         title.setObjectName("title")
         layout.addWidget(title)
 
-        subtitle = QLabel("Location helps Jarvis provide weather, local services, and time-aware responses.")
+        subtitle = QLabel("Location helps Volt AI provide weather, local services, and time-aware responses.")
         subtitle.setObjectName("subtitle")
         subtitle.setWordWrap(True)
         layout.addWidget(subtitle)
@@ -3292,7 +3292,7 @@ class LocationPage(ScrollableWizardPage):
         card_layout.setSpacing(12)
 
         status_title = QLabel("🔍 Detection Status")
-        status_title.setStyleSheet("font-size: 16px; font-weight: bold; color: #fbbf24;")
+        status_title.setStyleSheet("font-size: 16px; font-weight: bold; color: #67e8f9;")
         card_layout.addWidget(status_title)
         card_layout.addSpacing(8)
 
@@ -3311,7 +3311,7 @@ class LocationPage(ScrollableWizardPage):
         config_layout.setSpacing(12)
 
         config_title = QLabel("⚙️ Manual Configuration (Optional)")
-        config_title.setStyleSheet("font-size: 16px; font-weight: bold; color: #fbbf24;")
+        config_title.setStyleSheet("font-size: 16px; font-weight: bold; color: #67e8f9;")
         config_layout.addWidget(config_title)
         config_layout.addSpacing(8)
 
@@ -3430,7 +3430,7 @@ class LocationPage(ScrollableWizardPage):
             self.test_result_label.setStyleSheet("color: #4ade80;")
         else:
             self.test_result_label.setText("⚠️ Could not detect public IP via DNS")
-            self.test_result_label.setStyleSheet("color: #fbbf24;")
+            self.test_result_label.setStyleSheet("color: #67e8f9;")
 
     def _test_ip(self):
         """Test the entered IP address."""
@@ -3463,21 +3463,21 @@ class LocationPage(ScrollableWizardPage):
 
         if _is_private_ip(ip):
             self.test_result_label.setText("⚠️ This appears to be a private IP. Use your public IP instead.")
-            self.test_result_label.setStyleSheet("color: #fbbf24;")
+            self.test_result_label.setStyleSheet("color: #67e8f9;")
             self.save_btn.setEnabled(False)
             self._validated_ip = None
             return
 
         if _is_cgnat_ip(ip):
             self.test_result_label.setText("⚠️ This is a CGNAT IP (100.64.0.0/10). Use your true public IP instead.")
-            self.test_result_label.setStyleSheet("color: #fbbf24;")
+            self.test_result_label.setStyleSheet("color: #67e8f9;")
             self.save_btn.setEnabled(False)
             self._validated_ip = None
             return
 
         if not is_location_available():
             self.test_result_label.setText("⚠️ Cannot test: GeoLite2 database not installed")
-            self.test_result_label.setStyleSheet("color: #fbbf24;")
+            self.test_result_label.setStyleSheet("color: #67e8f9;")
             self.save_btn.setEnabled(True)
             self._validated_ip = ip
             return
@@ -3486,7 +3486,7 @@ class LocationPage(ScrollableWizardPage):
 
         if "error" in location_info:
             self.test_result_label.setText("⚠️ IP not found in database. It may still work.")
-            self.test_result_label.setStyleSheet("color: #fbbf24;")
+            self.test_result_label.setStyleSheet("color: #67e8f9;")
             self.save_btn.setEnabled(True)
             self._validated_ip = ip
         else:
@@ -3611,7 +3611,7 @@ class DictationPage(ScrollableWizardPage):
         hotkey_layout.setSpacing(12)
 
         hotkey_title = QLabel("⌨️ Dictation Hotkey")
-        hotkey_title.setStyleSheet("font-size: 16px; font-weight: bold; color: #fbbf24;")
+        hotkey_title.setStyleSheet("font-size: 16px; font-weight: bold; color: #67e8f9;")
         hotkey_layout.addWidget(hotkey_title)
 
         hotkey_desc = QLabel(
@@ -3647,7 +3647,7 @@ class DictationPage(ScrollableWizardPage):
         tips_layout.setSpacing(8)
 
         tips_title = QLabel("💡 How it Works")
-        tips_title.setStyleSheet("font-size: 16px; font-weight: bold; color: #fbbf24;")
+        tips_title.setStyleSheet("font-size: 16px; font-weight: bold; color: #67e8f9;")
         tips_layout.addWidget(tips_title)
 
         tips = QLabel(
@@ -3731,12 +3731,12 @@ class MCPPage(ScrollableWizardPage):
         layout.setContentsMargins(28, 20, 28, 20)
 
         # Header
-        title = QLabel("Give Jarvis more abilities")
+        title = QLabel("Give Volt AI more abilities")
         title.setObjectName("title")
         layout.addWidget(title)
 
         subtitle = QLabel(
-            "MCP (Model Context Protocol) servers give Jarvis extra abilities. "
+            "MCP (Model Context Protocol) servers give Volt AI extra abilities. "
             "Select any you'd like to enable — you can always change these later in Settings."
         )
         subtitle.setObjectName("subtitle")
@@ -3748,8 +3748,8 @@ class MCPPage(ScrollableWizardPage):
         # Node.js availability warning
         self._node_warning = QLabel(
             "⚠️  <b>Node.js not found.</b> The MCP servers below require Node.js to run. "
-            "<a href='https://nodejs.org/' style='color: #f59e0b;'>Download Node.js</a> "
-            "and restart Jarvis, or skip this page for now."
+            "<a href='https://nodejs.org/' style='color: #22d3ee;'>Download Node.js</a> "
+            "and restart Volt AI, or skip this page for now."
         )
         self._node_warning.setOpenExternalLinks(True)
         self._node_warning.setWordWrap(True)
@@ -3809,9 +3809,9 @@ class MCPPage(ScrollableWizardPage):
         tip.setWordWrap(True)
         tip.setStyleSheet(
             "background: qlineargradient(x1:0, y1:0, x2:1, y2:0, "
-            "stop:0 rgba(245, 158, 11, 0.12), stop:1 rgba(139, 92, 246, 0.08));"
-            "border: 1px solid rgba(245, 158, 11, 0.25);"
-            "border-radius: 8px; padding: 12px 16px; color: #fbbf24; font-size: 13px;"
+            "stop:0 rgba(34, 211, 238, 0.12), stop:1 rgba(139, 92, 246, 0.08));"
+            "border: 1px solid rgba(34, 211, 238, 0.25);"
+            "border-radius: 8px; padding: 12px 16px; color: #67e8f9; font-size: 13px;"
         )
         layout.addWidget(tip)
 
@@ -3899,7 +3899,7 @@ class SearchProvidersPage(ScrollableWizardPage):
         layout.addWidget(title)
 
         subtitle = QLabel(
-            "Jarvis uses DuckDuckGo for web search. When DuckDuckGo blocks a "
+            "Volt AI uses DuckDuckGo for web search. When DuckDuckGo blocks a "
             "request or has nothing useful, these optional fallbacks keep "
             "answers flowing — all off by default except Wikipedia."
         )
@@ -3925,7 +3925,7 @@ class SearchProvidersPage(ScrollableWizardPage):
             "DuckDuckGo is rate-limited. Free tier: 2,000 queries/month. "
             "Get a key at "
             "<a href='https://api.search.brave.com/app/keys' "
-            "style='color: #f59e0b;'>api.search.brave.com</a>."
+            "style='color: #22d3ee;'>api.search.brave.com</a>."
         )
         brave_desc.setOpenExternalLinks(True)
         brave_desc.setWordWrap(True)
@@ -3967,15 +3967,15 @@ class SearchProvidersPage(ScrollableWizardPage):
         layout.addWidget(wiki_card)
 
         tip = QLabel(
-            "💡  When every provider fails, Jarvis tells you the search was "
+            "💡  When every provider fails, Volt AI tells you the search was "
             "blocked rather than making something up."
         )
         tip.setWordWrap(True)
         tip.setStyleSheet(
             "background: qlineargradient(x1:0, y1:0, x2:1, y2:0, "
-            "stop:0 rgba(245, 158, 11, 0.12), stop:1 rgba(139, 92, 246, 0.08));"
-            "border: 1px solid rgba(245, 158, 11, 0.25);"
-            "border-radius: 8px; padding: 12px 16px; color: #fbbf24; font-size: 13px;"
+            "stop:0 rgba(34, 211, 238, 0.12), stop:1 rgba(139, 92, 246, 0.08));"
+            "border: 1px solid rgba(34, 211, 238, 0.25);"
+            "border-radius: 8px; padding: 12px 16px; color: #67e8f9; font-size: 13px;"
         )
         layout.addWidget(tip)
 
@@ -4062,12 +4062,12 @@ class CompletePage(ScrollableWizardPage):
         layout.addWidget(success_icon)
 
         # Header
-        title = QLabel("Meet your Jarvis")
+        title = QLabel("Meet your Volt AI")
         title.setObjectName("title")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(title)
 
-        subtitle = QLabel("Jarvis is ready to use. Click 'Start Jarvis' to launch the voice assistant.")
+        subtitle = QLabel("Volt AI is ready to use. Click 'Start Volt AI' to launch the voice assistant.")
         subtitle.setObjectName("subtitle")
         subtitle.setWordWrap(True)
         subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -4083,14 +4083,14 @@ class CompletePage(ScrollableWizardPage):
         card_layout.setSpacing(12)
 
         tips_title = QLabel("💡 Quick Tips")
-        tips_title.setStyleSheet("font-size: 16px; font-weight: bold; color: #fbbf24;")
+        tips_title.setStyleSheet("font-size: 16px; font-weight: bold; color: #67e8f9;")
         card_layout.addWidget(tips_title)
         card_layout.addSpacing(8)
 
         tips = QLabel(
-            "• Say your wake word (e.g. 'Jarvis') anywhere in your sentence to activate the assistant\n"
-            "• After Jarvis replies, speak your follow-up — no need to repeat the wake word\n"
-            "• Jarvis will appear in your system tray (menu bar on macOS)\n"
+            "• Say your wake word (e.g. 'Volt AI') anywhere in your sentence to activate the assistant\n"
+            "• After Volt AI replies, speak your follow-up — no need to repeat the wake word\n"
+            "• Volt AI will appear in your system tray (menu bar on macOS)\n"
             "• Right-click the tray icon to access settings and controls\n"
             "• View logs by clicking '📝 View Logs' in the tray menu"
         )
@@ -4099,16 +4099,16 @@ class CompletePage(ScrollableWizardPage):
         card_layout.addWidget(tips)
 
         # Memory viewer tip with special styling
-        brain_tip = QLabel("🧠  Peek inside Jarvis's brain — open the Memory Viewer to see what he remembers")
+        brain_tip = QLabel("🧠  Peek inside Volt AI's brain — open the Memory Viewer to see what he remembers")
         brain_tip.setWordWrap(True)
         brain_tip.setStyleSheet("""
             background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                stop:0 rgba(245, 158, 11, 0.15), stop:1 rgba(139, 92, 246, 0.1));
-            border: 1px solid rgba(245, 158, 11, 0.3);
+                stop:0 rgba(34, 211, 238, 0.15), stop:1 rgba(139, 92, 246, 0.1));
+            border: 1px solid rgba(34, 211, 238, 0.3);
             border-radius: 8px;
             padding: 12px 16px;
             margin-top: 8px;
-            color: #fbbf24;
+            color: #67e8f9;
             font-style: italic;
         """)
         card_layout.addWidget(brain_tip)

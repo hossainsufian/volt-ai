@@ -17,7 +17,7 @@ def resolve_input_device(sounddevice, voice_device, devices=None):
         except Exception as exc:
             raise ValueError(
                 'System default microphone unavailable. Choose an available input '
-                'in Jarvis Settings or set a default microphone in system Settings.'
+                'in Volt AI Settings or set a default microphone in system Settings.'
             ) from exc
         debug_log(f"Resolved default microphone: {info.get('name', 'Unknown')} (index {info['index']})", 'audio')
         return {'device': info['index']}

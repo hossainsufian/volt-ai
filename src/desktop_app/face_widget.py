@@ -367,7 +367,7 @@ class FaceWindow(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("🤖 Jarvis")
+        self.setWindowTitle("🤖 Volt AI")
         self.setMinimumSize(160, 208)
         self.resize(FaceWidget.DESIGN_WIDTH, FaceWidget.DESIGN_HEIGHT)
         self.setWindowFlags(
@@ -380,8 +380,8 @@ class FaceWindow(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         self.setAttribute(Qt.WidgetAttribute.WA_MacAlwaysShowToolWindow)
         self.setStyleSheet("background: transparent;")
-        self.setAccessibleName("Jarvis face")
-        self.setToolTip("Drag to move. Right-click for Jarvis controls.")
+        self.setAccessibleName("Volt AI face")
+        self.setToolTip("Drag to move. Right-click for Volt AI controls.")
         self._tray_menu: Optional[QMenu] = None
         self._drag_offset = None
 

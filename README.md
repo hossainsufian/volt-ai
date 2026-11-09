@@ -1,3 +1,20 @@
+# Volt AI
+
+**Volt AI** is a private, local-first AI assistant with text chat and voice, made by Sufian Hossain.
+It is a modified version of [Jarvis by Baris Sencan](https://github.com/isair/jarvis), shared free under the same non-commercial license (see [LICENSE](LICENSE)).
+
+### What Volt AI changes
+
+- **New name and personality.** Volt is warm, direct and honest. It says when it isn't sure and doesn't invent facts. This replaces the original sarcastic-butler persona.
+- **Wake word "Volt".** Say "Volt, …" to talk to it.
+- **Chat-first.** The text chat window opens when the app starts. To turn this off, set `"open_chat_on_start": false` in `~/.config/jarvis/config.json`.
+- **Runs on 8 GB laptops.** `qwen2.5:3b` is a supported model and speech recognition defaults to `small`, so CPU-only laptops don't run out of memory.
+- **No blocking start-up pop-up.** Using a model outside the recommended list is noted in the log; it no longer stops the app from starting.
+
+---
+
+*The original Jarvis README follows. Where it says "Jarvis", read "Volt AI".*
+
 <div align="center">
 
 # Jarvis

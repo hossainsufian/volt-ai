@@ -70,7 +70,7 @@ CATALOGUE: List[MCPEntry] = [
         name="youtube-transcript",
         display_name="📺 YouTube Transcripts",
         description="Extract and summarise transcripts from any YouTube video — "
-                    "just paste a link and ask Jarvis about the content",
+                    "just paste a link and ask Volt AI about the content",
         command="npx",
         args=["-y", "@kimtaeyoon83/mcp-server-youtube-transcript"],
         wizard_featured=True,

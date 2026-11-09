@@ -45,7 +45,7 @@ class TaskCentreWindow(QDialog):
         *, max_history: int = DEFAULT_TASK_HISTORY,
     ) -> None:
         super().__init__(parent)
-        self.setWindowTitle("🧭 Jarvis Task Centre")
+        self.setWindowTitle("🧭 Volt AI Task Centre")
         self.setMinimumSize(720, 520)
         self.setStyleSheet(JARVIS_THEME_STYLESHEET)
         self._submit_callback = submit_callback
@@ -64,7 +64,7 @@ class TaskCentreWindow(QDialog):
         title = QLabel("🧭 Task Centre")
         title.setObjectName("title")
         layout.addWidget(title)
-        subtitle = QLabel("Queue prompts for Jarvis and follow their progress.")
+        subtitle = QLabel("Queue prompts for Volt AI and follow their progress.")
         subtitle.setObjectName("subtitle")
         layout.addWidget(subtitle)
 
@@ -83,7 +83,7 @@ class TaskCentreWindow(QDialog):
 
         input_row = QHBoxLayout()
         self.prompt = QTextEdit()
-        self.prompt.setPlaceholderText("Describe what Jarvis should do…")
+        self.prompt.setPlaceholderText("Describe what Volt AI should do…")
         self.prompt.setFixedHeight(78)
         input_row.addWidget(self.prompt, 1)
         self.submit_button = QPushButton("🚀 Run Task")
@@ -174,7 +174,7 @@ class TaskCentreWindow(QDialog):
         if self._pending_request is not None:
             self._finish_submission(
                 self._pending_request, accepted=False,
-                error="No confirmation from Jarvis. Check the task list before trying again.",
+                error="No confirmation from Volt AI. Check the task list before trying again.",
             )
 
     def _submit(self) -> None:

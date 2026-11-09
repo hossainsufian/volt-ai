@@ -291,7 +291,7 @@ def _print_cuda_unavailable_hint(missing_libs: list[str]) -> None:
     if missing_libs:
         print(f"     Missing: {', '.join(missing_libs)}", flush=True)
     print(
-        "  💡 For GPU acceleration, click 'Reinstall GPU libraries' in the Jarvis tray menu",
+        "  💡 For GPU acceleration, click 'Reinstall GPU libraries' in the Volt AI tray menu",
         flush=True,
     )
 
@@ -744,7 +744,7 @@ class VoiceListener(threading.Thread):
                 debug_log("early beep: hot window active", "voice")
             else:
                 # Not in hot window — check for wake word
-                wake_word = getattr(self.cfg, "wake_word", "jarvis")
+                wake_word = getattr(self.cfg, "wake_word", "volt")
                 aliases = list(set(getattr(self.cfg, "wake_aliases", [])) | {wake_word})
                 fuzzy_ratio = float(getattr(self.cfg, "wake_fuzzy_ratio", 0.78))
                 if is_wake_word_detected(text_lower, wake_word, aliases, fuzzy_ratio):
@@ -960,7 +960,7 @@ class VoiceListener(threading.Thread):
                             debug_log("🔇 Directed echo rejected", "voice")
                             self._stop_thinking_tune()
                             return
-                    wake_word = getattr(self.cfg, "wake_word", "jarvis")
+                    wake_word = getattr(self.cfg, "wake_word", "volt")
                     aliases = list(set(getattr(self.cfg, "wake_aliases", [])) | {wake_word})
                     has_wake_word = self._wake_timestamp is not None or is_wake_word_detected(text_lower, wake_word, aliases)
                     if could_be_hot_window or has_wake_word:
@@ -984,7 +984,7 @@ class VoiceListener(threading.Thread):
                     debug_log(f"⏭️ Intent judge inconclusive ({intent_judgment.confidence}), checking wake word", "voice")
 
         # Priority 4: Wake word detection (fallback when intent judge unavailable/inconclusive)
-        wake_word = getattr(self.cfg, "wake_word", "jarvis")
+        wake_word = getattr(self.cfg, "wake_word", "volt")
         aliases = set(getattr(self.cfg, "wake_aliases", [])) | {wake_word}
         fuzzy_ratio = float(getattr(self.cfg, "wake_fuzzy_ratio", 0.78))
 
@@ -1875,7 +1875,7 @@ class VoiceListener(threading.Thread):
                         print("  │  4. Turn ON 'Let apps access your microphone'          │", flush=True)
                         print("  │  5. Turn ON 'Let desktop apps access your microphone'  │", flush=True)
                         print("  │                                                         │", flush=True)
-                        print("  │  Then restart Jarvis.                                  │", flush=True)
+                        print("  │  Then restart Volt AI.                                  │", flush=True)
                         print("  └─────────────────────────────────────────────────────────┘", flush=True)
                         print("", flush=True)
                     return
@@ -2264,7 +2264,7 @@ class VoiceListener(threading.Thread):
             self._start_transcription_worker()
 
             # Show ready message only after stream is confirmed active
-            wake_word = getattr(self.cfg, "wake_word", "jarvis").lower()
+            wake_word = getattr(self.cfg, "wake_word", "volt").lower()
             wake_title = wake_word.title()
             print(f"\n{'─' * 50}\n🎙️  Listening! Try:", flush=True)
             print(f"      {self._weather_example(wake_title)}", flush=True)
@@ -2352,7 +2352,7 @@ class VoiceListener(threading.Thread):
             self._consume_audio_frames(frame_ms)
         except Exception as exc:
             debug_log(f"audio-frame worker failed ({type(exc).__name__})", "voice")
-            print("  ❌ Audio-frame processing stopped. Restart Jarvis to resume listening.", flush=True)
+            print("  ❌ Audio-frame processing stopped. Restart Volt AI to resume listening.", flush=True)
             self.stop()
 
     def _finish_audio_worker(self) -> None:

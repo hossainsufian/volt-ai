@@ -93,7 +93,7 @@ class JarvisOrb(QWidget):
     def __init__(self, size: int, parent=None):
         super().__init__(parent)
         self.setFixedSize(size, size)
-        self.setAccessibleName('Jarvis')
+        self.setAccessibleName('Volt AI')
 
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
@@ -313,18 +313,18 @@ _MESSAGE_TEXT_STYLES = {
 }
 
 _DAEMON_STATUS_MESSAGES = {
-    "starting": "Starting Jarvis...",
-    "stopping": "Stopping Jarvis...",
+    "starting": "Starting Volt AI...",
+    "stopping": "Stopping Volt AI...",
     "stopped": "Start Listening from the tray to use chat.",
-    "crashed": "Jarvis stopped unexpectedly. Start Listening to reconnect.",
+    "crashed": "Volt AI stopped unexpectedly. Start Listening to reconnect.",
 }
 
 _DAEMON_STATUS_PLACEHOLDERS = {
-    "starting": "Jarvis is starting",
-    "stopping": "Jarvis is stopping",
+    "starting": "Volt AI is starting",
+    "stopping": "Volt AI is stopping",
     "stopped": "Start Listening from the tray to use chat",
     "crashed": "Start Listening from the tray to reconnect chat",
-    "running": "Message Jarvis…",
+    "running": "Message Volt AI…",
 }
 
 _HEADER_STATUS_TEXTS = {
@@ -359,7 +359,7 @@ class ChatWindow(QMainWindow):
         control_fn: Optional[Callable[[str, Optional[dict]], None]] = None,
     ) -> None:
         super().__init__()
-        self.setWindowTitle("Jarvis Chat")
+        self.setWindowTitle("Volt AI Chat")
         self.setObjectName('chatWindow')
         self.setWindowFlag(Qt.WindowType.FramelessWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
@@ -424,7 +424,7 @@ class ChatWindow(QMainWindow):
             button.clicked.connect(callback)
         title_layout.addWidget(self.minimise_button)
         title_layout.addStretch()
-        capsule = QLabel('J A R V I S  /  CHAT')
+        capsule = QLabel('V O L T  A I  /  CHAT')
         capsule.setObjectName('chatCapsule')
         capsule.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         title_layout.addWidget(capsule)
@@ -441,7 +441,7 @@ class ChatWindow(QMainWindow):
         header.addWidget(avatar)
         name_col = QVBoxLayout()
         name_col.setSpacing(3)
-        name_label = QLabel("Jarvis")
+        name_label = QLabel("Volt AI")
         name_label.setObjectName('chatName')
         name_col.addWidget(name_label)
         self._header_status = QLabel("")
@@ -506,7 +506,7 @@ class ChatWindow(QMainWindow):
         self.input_widget = QPlainTextEdit()
         self.input_widget.setPlaceholderText(_DAEMON_STATUS_PLACEHOLDERS["running"])
         self.input_widget.setFixedHeight(58)
-        self.input_widget.setAccessibleName('Message Jarvis')
+        self.input_widget.setAccessibleName('Message Volt AI')
         self.input_widget.setToolTip('Enter to send. Shift+Enter for a new line.')
         self.input_widget.setStyleSheet(_INPUT_STYLE)
         self.input_widget.keyPressEvent = self._input_key_press  # type: ignore[method-assign]
@@ -702,7 +702,7 @@ class ChatWindow(QMainWindow):
 
     def _on_busy(self) -> None:
         self._set_thinking(False)
-        self._append_system("Jarvis is busy with another query already.")
+        self._append_system("Volt AI is busy with another query already.")
 
     # --- Subprocess IPC entry point --------------------------------------
 
@@ -915,7 +915,7 @@ class ChatWindow(QMainWindow):
 
     def _refresh_status_label(self) -> None:
         if self._query_in_flight:
-            self._status_label.setText("  Jarvis is thinking…")
+            self._status_label.setText("  Volt AI is thinking…")
             self._status_label.setVisible(True)
             return
 

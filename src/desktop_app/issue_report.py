@@ -39,7 +39,7 @@ class IssueReportDialog(QDialog):
 
         form_scroll, form = self._scroll_page()
         heading = QLabel('Tell us what happened')
-        heading.setStyleSheet('font-size: 20px; font-weight: 600; color: #fbbf24;')
+        heading.setStyleSheet('font-size: 20px; font-weight: 600; color: #67e8f9;')
         form.addWidget(heading)
         intro = QLabel('A few words are enough to get started. You can check the report before opening GitHub.')
         intro.setWordWrap(True)
@@ -69,7 +69,7 @@ class IssueReportDialog(QDialog):
 
         review_scroll, review = self._scroll_page()
         heading = QLabel('Check your report')
-        heading.setStyleSheet('font-size: 20px; font-weight: 600; color: #fbbf24;')
+        heading.setStyleSheet('font-size: 20px; font-weight: 600; color: #67e8f9;')
         review.addWidget(heading)
         self.preview = QTextBrowser()
         self.preview.setOpenExternalLinks(False)

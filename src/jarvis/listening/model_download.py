@@ -199,19 +199,19 @@ def prepare_faster_whisper_model(model_name: str) -> str:
         debug_log(f'Whisper download failed: {error.category}', 'voice')
         if error.category == 'disk_space':
             print('  💡 Free space on the model cache drive, or choose a smaller Whisper model '
-                  'in Settings, then restart Jarvis. Any cached files have been kept.', flush=True)
+                  'in Settings, then restart Volt AI. Any cached files have been kept.', flush=True)
         elif error.category == 'cache_access':
             print('  💡 Access was denied while preparing the speech model. Check cache folder permissions '
-                  'and security software, then restart Jarvis. Any cached files have been kept.', flush=True)
+                  'and security software, then restart Volt AI. Any cached files have been kept.', flush=True)
         elif error.category == 'certificate':
             print('  💡 The speech model download could not verify the server certificate. '
                   'Check your proxy or security software certificate trust with your administrator, '
-                  'then restart Jarvis. Any cached files have been kept.', flush=True)
+                  'then restart Volt AI. Any cached files have been kept.', flush=True)
         elif error.category == 'network':
             print('  💡 The speech model download connection failed. Check your connection, proxy '
-                  'and firewall, then restart Jarvis to resume. Any cached files have been kept.', flush=True)
+                  'and firewall, then restart Volt AI to resume. Any cached files have been kept.', flush=True)
         elif error.category in ('timeout', 'worker_exit'):
-            print('  💡 Any cached files have been kept. Check your connection and restart Jarvis '
+            print('  💡 Any cached files have been kept. Check your connection and restart Volt AI '
                   'to resume the speech model download.', flush=True)
             if error.category == 'timeout':
                 print('     🎤 For a smaller download, choose a smaller Whisper model in Settings.', flush=True)

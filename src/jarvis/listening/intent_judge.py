@@ -141,7 +141,7 @@ class IntentJudgeConfig:
     (the fast tier: ``resolve_model(cfg, Tier.FAST)``).
     """
 
-    assistant_name: str = "Jarvis"
+    assistant_name: str = "Volt AI"
     aliases: list = field(default_factory=list)
     model: str = "gemma4:e2b"
     cfg: Any = None
@@ -550,7 +550,7 @@ def create_intent_judge(cfg) -> IntentJudge:
     shape automatically.
     """
     config = IntentJudgeConfig(
-        assistant_name=str(getattr(cfg, "wake_word", "jarvis")).capitalize(),
+        assistant_name=str(getattr(cfg, "wake_word", "volt")).capitalize(),
         aliases=list(getattr(cfg, "wake_aliases", [])),
         model=resolve_model(cfg, Tier.FAST),
         cfg=cfg,
