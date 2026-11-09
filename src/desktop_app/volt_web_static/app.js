@@ -236,6 +236,8 @@ async function refreshState() {
   $("phoneRow").hidden = !s.local;
   $("phoneBox").hidden = !(s.local && s.settings.phone_access && s.phone_url);
   $("phoneUrl").textContent = s.phone_url || "";
+  $("tsLine").hidden = !s.tailscale_url;
+  $("tsUrl").textContent = s.tailscale_url || "";
   $("pairCode").textContent = s.pairing_code || "";
   els.imageMode.hidden = !s.settings.images_enabled;
   updateComposer();

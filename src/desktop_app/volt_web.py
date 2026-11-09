@@ -39,6 +39,7 @@ IMAGE_API = "https://image.pollinations.ai/prompt/"
 DEFAULT_PORT = 8765
 PAIR_MAX_FAILURES = 5
 PAIR_LOCKOUT_SEC = 300
+PAIR_GLOBAL_MAX_FAILURES = 20
 
 DEFAULT_SETTINGS = {
     "images_enabled": False,
@@ -53,6 +54,20 @@ class VoltBridge(Protocol):
     def submit(self, text: str) -> bool: ...
     def cancel(self) -> None: ...
     def restore(self, messages: list[dict]) -> None: ...
+
+
+def tailscale_address() -> Optional[str]:
+    """This machine's Tailscale IPv4 address (100.64.0.0/10), if connected."""
+    import ipaddress
+    try:
+        import psutil
+        for name, addrs in psutil.net_if_addrs().items():
+            for a in addrs:
+                if a.family == socket.AF_INET and ipaddress.ip_address(a.address) in ipaddress.ip_network("100.64.0.0/10"):
+                    return a.address
+    except Exception as exc:
+        debug_log(f"tailscale address lookup failed: {exc}", "volt")
+    return None
 
 
 def lan_address() -> Optional[str]:
@@ -293,8 +308,24 @@ class VoltWebServer:
             if not server._token_ok(current_token()):
                 abort(401)
 
+        forwarded_headers = ("Cf-Connecting-Ip", "Cf-Ray", "X-Forwarded-For", "X-Forwarded-Host")
+
+        def via_tunnel() -> bool:
+            return any(h in request.headers for h in forwarded_headers)
+
         def is_local() -> bool:
-            return request.remote_addr in ("127.0.0.1", "::1")
+            # Tunnel traffic arrives from 127.0.0.1 too, so forwarding headers
+            # mark it as remote: only the laptop itself gets laptop powers.
+            return request.remote_addr in ("127.0.0.1", "::1") and not via_tunnel()
+
+        def client_ip() -> str:
+            if via_tunnel():
+                return request.headers.get("Cf-Connecting-Ip") or request.headers.get(
+                    "X-Forwarded-For", "?").split(",")[0].strip()
+            return request.remote_addr or "?"
+
+        def secure_cookie() -> bool:
+            return request.is_secure or request.headers.get("X-Forwarded-Proto") == "https" or via_tunnel()
 
         @app.after_request
         def _headers(resp):
@@ -329,10 +360,12 @@ class VoltWebServer:
 
         @app.post("/api/pair")
         def pair():
-            ip = request.remote_addr or "?"
+            ip = client_ip()
             now = time.time()
             recent = [t for t in server._pair_failures.get(ip, []) if now - t < PAIR_LOCKOUT_SEC]
-            if len(recent) >= PAIR_MAX_FAILURES:
+            overall = [t for times in server._pair_failures.values() for t in times
+                       if now - t < PAIR_LOCKOUT_SEC]
+            if len(recent) >= PAIR_MAX_FAILURES or len(overall) >= PAIR_GLOBAL_MAX_FAILURES:
                 return jsonify(error="Too many wrong codes. Wait 5 minutes."), 429
             code = str((request.get_json(silent=True) or {}).get("code", "")).strip()
             if not secrets.compare_digest(code, server.pairing_code):
@@ -350,7 +383,7 @@ class VoltWebServer:
             debug_log("volt phone paired", "volt")
             resp = jsonify(ok=True)
             resp.set_cookie(COOKIE, token, httponly=True, samesite="Strict",
-                            max_age=10 * 365 * 24 * 3600)
+                            secure=secure_cookie(), max_age=10 * 365 * 24 * 3600)
             return resp
 
         @app.get("/api/state")
@@ -361,6 +394,7 @@ class VoltWebServer:
                 settings=server.settings,
                 local=is_local(),
                 phone_url=server.phone_url(),
+                tailscale_url=server.tailscale_url(),
                 pairing_code=server.pairing_code if is_local() else None,
                 devices=len(server._devices),
             )
@@ -501,6 +535,13 @@ class VoltWebServer:
         if not self.settings.get("phone_access"):
             return None
         addr = lan_address()
+        return f"http://{addr}:{self.port}/" if addr else None
+
+    def tailscale_url(self) -> Optional[str]:
+        """Address that reaches this laptop from the user's other Tailscale devices."""
+        if not self.settings.get("phone_access"):
+            return None
+        addr = tailscale_address()
         return f"http://{addr}:{self.port}/" if addr else None
 
     def desktop_url(self) -> str:
