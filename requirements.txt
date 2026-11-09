@@ -44,3 +44,4 @@ PyQt6-WebEngine>=6.6.0
 psutil>=5.9.0
 # Note: 6.13.0+ has VC runtime pre-loading fix for Windows
 pyinstaller>=6.13.0
+anthropic>=2.6.0

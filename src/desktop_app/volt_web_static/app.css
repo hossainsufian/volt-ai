@@ -201,3 +201,5 @@ menu { display: flex; justify-content: flex-end; padding: 0; margin: 18px 0 0; }
   max-width: calc(100vw - 32px); transition: opacity .2s, transform .2s; z-index: 50; box-shadow: 0 6px 20px rgba(0,0,0,.18);
 }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
+.key-input { flex: 1 1 220px; min-width: 0; padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper, #fff); color: inherit; font: inherit; }
+#claudeModel { padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: transparent; color: inherit; font: inherit; }

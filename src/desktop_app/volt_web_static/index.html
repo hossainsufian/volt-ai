@@ -82,6 +82,21 @@
         <p><small>Tip: in your phone's browser menu choose <i>Add to Home screen</i> to install Volt AI like an app.</small></p>
         <button type="button" class="link" id="forgetDevices">Disconnect all phones</button>
       </div>
+      <div class="account" id="claudeBox">
+        <h3>Claude brain (for coding)</h3>
+        <p><small>Use Anthropic's Claude for much stronger coding and app building. Needs your own API key from <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>. Paid: each message uses your Claude credit, and your messages are sent to Anthropic.</small></p>
+        <label class="toggle" id="claudeRow" hidden>
+          <input type="checkbox" id="setClaude">
+          <span><strong>Answer with Claude</strong><br><small>Off: Volt uses the free brain on this laptop.</small></span>
+        </label>
+        <p id="claudeModelRow" hidden><label>Model: <select id="claudeModel"></select></label></p>
+        <p id="claudeKeyLine"></p>
+        <div class="account-buttons">
+          <input type="password" id="claudeKey" class="key-input" placeholder="Paste key: sk-ant-…" autocomplete="off" spellcheck="false">
+          <button type="button" class="primary" id="saveClaudeKey">Save key</button>
+          <button type="button" class="link" id="removeClaudeKey" hidden>Remove key</button>
+        </div>
+      </div>
       <div class="account" id="accountBox">
         <h3>Backup to Google Drive</h3>
         <p><small>Sign in with your Google account to keep your chats and images safe. If your computer is reset, sign in again and they come back.</small></p>

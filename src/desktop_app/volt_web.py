@@ -31,6 +31,7 @@ from typing import Callable, Optional, Protocol
 
 from jarvis.debug import debug_log
 
+from desktop_app import volt_claude
 from desktop_app.volt_store import VoltStore
 
 STATIC_DIR = Path(__file__).parent / "volt_web_static"
@@ -44,6 +45,8 @@ PAIR_GLOBAL_MAX_FAILURES = 20
 DEFAULT_SETTINGS = {
     "images_enabled": False,
     "phone_access": False,
+    "claude_enabled": False,
+    "claude_model": volt_claude.DEFAULT_MODEL,
 }
 
 
@@ -93,6 +96,7 @@ class VoltWebServer:
         self.bridge = bridge
         self.port = port
         self._http_get = http_get
+        self._claude_client = None  # tests inject a fake client
         self._lock = threading.RLock()
         self._settings_path = store.data_dir / "settings.json"
         self._devices_path = store.data_dir / "devices.json"
@@ -130,7 +134,10 @@ class VoltWebServer:
     def update_settings(self, **changes) -> dict:
         with self._lock:
             for key, value in changes.items():
-                if key in DEFAULT_SETTINGS:
+                if key == "claude_model":
+                    if value in volt_claude.MODELS:
+                        self.settings[key] = value
+                elif key in DEFAULT_SETTINGS:
                     self.settings[key] = bool(value)
             self._save_json(self._settings_path, self.settings)
             if "phone_access" in changes:
@@ -168,7 +175,12 @@ class VoltWebServer:
                 status="error",
             )
 
+    def claude_active(self) -> bool:
+        return bool(self.settings.get("claude_enabled")) and volt_claude.load_key() is not None
+
     def _send(self, chat_id: str, text: str) -> tuple[dict, int]:
+        if self.claude_active():
+            return self._send_claude(chat_id, text)
         if not self.bridge.is_available():
             return {"error": "Volt AI is starting or stopped. Try again in a moment."}, 503
         if self.store.pending_message() is not None:
@@ -187,6 +199,44 @@ class VoltWebServer:
             self.store.update_message(pending["id"], text="Could not reach Volt AI.", status="error")
         debug_log(f"volt chat message submitted to chat {chat_id}", "volt")
         return {"user": user, "reply": self.store.get_message(pending["id"])}, 200
+
+    def _send_claude(self, chat_id: str, text: str) -> tuple[dict, int]:
+        if self.store.pending_message() is not None:
+            return {"error": "Volt AI is still answering. Wait for the reply first."}, 409
+        if self.store.get_chat(chat_id) is None:
+            return {"error": "Chat not found."}, 404
+        with self._lock:
+            # The local brain's memory no longer matches this chat; reload it next time.
+            self._active_chat = None
+            user = self.store.add_message(chat_id, "user", text)
+            pending = self.store.add_message(chat_id, "assistant", "", status="pending")
+        threading.Thread(
+            target=self._claude_worker, args=(chat_id, pending["id"]), daemon=True
+        ).start()
+        return {"user": user, "reply": self.store.get_message(pending["id"])}, 200
+
+    def _claude_worker(self, chat_id: str, message_id: int) -> None:
+        key = volt_claude.load_key()
+        try:
+            if not key:
+                raise RuntimeError("no key")
+            answer = volt_claude.reply(
+                self.store.conversation_for_restore(chat_id),
+                self.settings.get("claude_model", volt_claude.DEFAULT_MODEL),
+                key,
+                client=self._claude_client,
+            )
+            status = "done"
+        except Exception as exc:
+            debug_log(f"volt claude request failed: {type(exc).__name__}", "volt")
+            answer = (volt_claude.friendly_error(exc) if key
+                      else "Add your Claude API key in Settings first.")
+            status = "error"
+        current = self.store.get_message(message_id)
+        if current and current["status"] == "pending":  # not stopped meanwhile
+            self.store.update_message(message_id, text=answer, status=status)
+            if status == "done":
+                self.schedule_backup()
 
     # --- Images ---------------------------------------------------------------
 
@@ -397,6 +447,12 @@ class VoltWebServer:
                 tailscale_url=server.tailscale_url(),
                 pairing_code=server.pairing_code if is_local() else None,
                 devices=len(server._devices),
+                claude={
+                    "active": server.claude_active(),
+                    "has_key": volt_claude.load_key() is not None,
+                    "key_hint": volt_claude.masked_key() if is_local() else None,
+                    "models": volt_claude.MODELS,
+                },
             )
 
         @app.post("/api/settings")
@@ -406,6 +462,22 @@ class VoltWebServer:
                 abort(403)  # only the laptop can change settings
             changes = request.get_json(silent=True) or {}
             return jsonify(settings=server.update_settings(**changes))
+
+        @app.post("/api/claude/key")
+        def claude_key():
+            require_auth()
+            if not is_local():
+                abort(403)
+            key = str((request.get_json(silent=True) or {}).get("key", "")).strip()
+            if not key:
+                volt_claude.clear_key()
+                server.update_settings(claude_enabled=False)
+                return jsonify(ok=True, has_key=False)
+            if not key.startswith("sk-ant-") or len(key) < 30 or any(c.isspace() for c in key):
+                return jsonify(error="That doesn't look like a Claude API key. It starts with sk-ant-."), 400
+            volt_claude.save_key(key)
+            server.update_settings(claude_enabled=True)
+            return jsonify(ok=True, has_key=True, key_hint=volt_claude.masked_key())
 
         @app.post("/api/devices/forget")
         def forget_devices():

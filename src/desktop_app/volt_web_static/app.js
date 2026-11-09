@@ -13,7 +13,7 @@ const els = {
   thread: $("thread"), title: $("chatTitle"), status: $("status"), input: $("input"),
   form: $("composer"), send: $("sendBtn"), stop: $("stopBtn"), imageMode: $("imageMode"),
 };
-let state = { chats: [], current: null, messages: [], available: false, settings: {}, local: false };
+let state = { chats: [], current: null, messages: [], available: false, settings: {}, local: false, claude: {} };
 let pollTimer = null;
 
 async function api(path, options = {}) {
@@ -146,8 +146,10 @@ function updateComposer() {
   els.stop.hidden = !pending;
   els.send.hidden = pending;
   els.send.disabled = !els.input.value.trim();
-  els.status.textContent = state.available ? "" : "Starting…";
-  els.status.className = "status" + (state.available ? "" : " off");
+  const claude = !!(state.claude && state.claude.active);
+  const ready = claude || state.available;
+  els.status.textContent = claude ? "Claude" : ready ? "" : "Starting…";
+  els.status.className = "status" + (ready ? "" : " off");
 }
 async function copyText(text, btn) {
   try { await navigator.clipboard.writeText(text); btn.textContent = "Copied"; }
@@ -240,8 +242,40 @@ async function refreshState() {
   $("tsUrl").textContent = s.tailscale_url || "";
   $("pairCode").textContent = s.pairing_code || "";
   els.imageMode.hidden = !s.settings.images_enabled;
+  state.claude = s.claude || {};
+  renderClaude(s);
   updateComposer();
 }
+function renderClaude(s) {
+  const c = s.claude || {};
+  $("claudeBox").hidden = !s.local;
+  if (!s.local) return;
+  $("claudeRow").hidden = $("claudeModelRow").hidden = $("removeClaudeKey").hidden = !c.has_key;
+  $("setClaude").checked = !!s.settings.claude_enabled;
+  const sel = $("claudeModel");
+  if (!sel.options.length) {
+    for (const [id, label] of Object.entries(c.models || {})) sel.add(new Option(label, id));
+  }
+  sel.value = s.settings.claude_model;
+  $("claudeKeyLine").textContent = c.has_key ? `Key saved: ${c.key_hint}` : "";
+  $("claudeKey").placeholder = c.has_key ? "Paste a new key to replace it" : "Paste key: sk-ant-…";
+}
+$("saveClaudeKey").onclick = async () => {
+  const key = $("claudeKey").value.trim();
+  if (!key) { toast("Paste your Claude API key first."); return; }
+  try {
+    await api("/api/claude/key", { method: "POST", body: { key } });
+    $("claudeKey").value = ""; toast("Claude is on. New messages will use Claude.");
+  } catch (err) { toast(err.message); }
+  refreshState().catch(() => {});
+};
+$("removeClaudeKey").onclick = async () => {
+  if (!confirm("Remove your Claude API key from this laptop? Volt goes back to the free brain.")) return;
+  await api("/api/claude/key", { method: "POST", body: { key: "" } }).catch((e) => toast(e.message));
+  refreshState().catch(() => {});
+};
+$("setClaude").onchange = (e) => saveSetting("claude_enabled", e.target.checked);
+$("claudeModel").onchange = (e) => saveSetting("claude_model", e.target.value);
 async function refreshAccount() {
   if (!state.local) { $("accountBox").hidden = true; return; }
   const a = await api("/api/account");
