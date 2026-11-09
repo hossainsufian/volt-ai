@@ -338,7 +338,7 @@ class TestRuntimeStatusSnapshot:
         assert snapshot.ollama_needed is True
         assert snapshot.ollama_running is True
         assert snapshot.ollama_version == "0.9.1"
-        assert snapshot.ollama_owner == "Jarvis"
+        assert snapshot.ollama_owner == "Volt AI"
         assert snapshot.low_power_mode is False
         assert snapshot.mcp_count == 2
 

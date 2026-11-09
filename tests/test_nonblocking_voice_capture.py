@@ -102,7 +102,7 @@ def test_full_transcript_queue_cancels_pending_delivery(synthetic_listener, inva
     obj._transcription_results_q = ResultQueue(maxsize=1)
     obj._transcription_results_q.put(object())
     def transcribe(audio):
-        return 'Jarvis hello', 'en', ()
+        return 'Volt hello', 'en', ()
     obj._transcribe_audio = transcribe
     job = SimpleNamespace(audio=np.ones(obj.cfg.sample_rate), start_time=1., end_time=2.,
                           energy=.1, capture_generation=0, captured_during_tts=False,
@@ -138,9 +138,9 @@ def test_invalidated_intent_result_does_not_start_query(synthetic_listener, inva
             obj.set_capture_paused('dictation', True)
             obj.set_capture_paused('dictation', False)
         return IntentJudgment(directed=True,  stop=False,
-                              confidence='high', reasoning='Addressed to Jarvis')
+                              confidence='high', reasoning='Addressed to Volt')
     obj._intent_judge = SimpleNamespace(available=True, judge=judge)
-    obj._process_transcript('Jarvis weather', captured_during_tts=False,
+    obj._process_transcript('Volt weather', captured_during_tts=False,
                             captured_tts_start_time=0., generation=obj._capture_generation, language=None)
     assert not obj.state_manager.get_pending_query(), 'Invalidated intent was accepted as a new query'
 
@@ -284,7 +284,7 @@ def test_failed_frame_processing_stops_listener_and_reports_recovery(synthetic_l
     obj._on_audio(np.ones((obj._frame_samples, 1), dtype=np.float32), obj._frame_samples, None, None)
     obj._run_audio_worker(obj.cfg.vad_frame_ms)
     assert obj._should_stop
-    assert 'Restart Jarvis to resume listening' in capsys.readouterr().out
+    assert 'Restart Volt AI to resume listening' in capsys.readouterr().out
 
 
 def test_pause_after_dequeue_rejects_audio_captured_before_pause(synthetic_listener):
@@ -377,19 +377,19 @@ def test_transcript_keeps_capture_generation_across_buffer_storage(synthetic_lis
     obj._transcript_buffer.add = add
     obj._intent_judge = SimpleNamespace(available=True, judge=lambda **kw:
         IntentJudgment(directed=True, stop=False,
-                      confidence='high', reasoning='Addressed to Jarvis'))
-    result = _TranscriptionResult('Jarvis weather', 'en', (), 1., 2., .1,
+                      confidence='high', reasoning='Addressed to Volt'))
+    result = _TranscriptionResult('Volt weather', 'en', (), 1., 2., .1,
                                    obj._capture_generation, False, 0.)
     obj._handle_transcription_result(result)
     assert not obj.state_manager.get_pending_query(), 'Old transcript adopted a new voice generation'
 
 
 @pytest.mark.parametrize('text', [
-    "I'm talking to Jairus not you.",
-    "I'm talking to Jarvis, not you.",
-    "I told my friend about Jarvis yesterday.",
-    "Jarvis'le konuşuyorum, seninle değil.",
-    "Estoy hablando con Jarvis, no contigo.",
+    "I'm talking to Volts not you.",
+    "I'm talking to Volt, not you.",
+    "I told my friend about Volt yesterday.",
+    "Volt'le konuşuyorum, seninle değil.",
+    "Estoy hablando con Volt, no contigo.",
 ])
 def test_confident_mention_rejection_does_not_start_query(synthetic_listener, text):
     from jarvis.listening.intent_judge import IntentJudgment
@@ -409,7 +409,7 @@ def test_direct_address_and_inconclusive_fallback_remain_usable(synthetic_listen
     obj._intent_judge = SimpleNamespace(available=True, judge=lambda **kwargs:
         IntentJudgment(directed=directed,
                        stop=False, confidence=confidence, reasoning='Address or uncertainty'))
-    obj._process_transcript('Jarvis I am tired', captured_during_tts=False,
+    obj._process_transcript('Volt I am tired', captured_during_tts=False,
                             captured_tts_start_time=0., generation=obj._capture_generation, language=None)
     assert obj.state_manager.get_pending_query(), 'Direct address or fail-open fallback was lost'
 
@@ -417,8 +417,8 @@ def test_direct_address_and_inconclusive_fallback_remain_usable(synthetic_listen
 @pytest.mark.parametrize('text,accepted', [
     ("Doesn't matter if her oppresses A, first joins", False),
     ('the first person joins the game', False),
-    ('Jairus what time is it', True),
-    ('Jarvas what time is it', True),
+    ('Volts what time is it', True),
+    ('Vault what time is it', True),
 ])
 def test_whole_alias_gate_keeps_ambient_words_out_of_reply_collection(synthetic_listener, text, accepted):
     from jarvis.listening.intent_judge import IntentJudgment

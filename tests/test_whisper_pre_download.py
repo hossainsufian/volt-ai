@@ -370,7 +370,7 @@ def test_terminal_download_failure_explains_retained_cache_and_recovery(monkeypa
     assert failure.value.category == category
     output = capsys.readouterr().out.lower()
     assert 'cached files' in output
-    assert 'restart jarvis' in output
+    assert 'restart volt ai' in output
     assert 'resume' in output
     if category == 'timeout':
         assert 'smaller' in output and 'settings' in output

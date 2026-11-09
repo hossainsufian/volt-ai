@@ -20,7 +20,7 @@ class TestIntentJudgeConfig:
     def test_default_config(self):
         """Default config has reasonable values."""
         config = IntentJudgeConfig()
-        assert config.assistant_name == "Jarvis"
+        assert config.assistant_name == "Volt AI"
         assert config.model == "gemma4:e2b"
         assert config.timeout_sec == 15.0
         assert config.aliases == []
@@ -60,7 +60,7 @@ class TestIntentJudge:
     def test_init(self):
         """Can initialize intent judge."""
         judge = IntentJudge()
-        assert judge.config.assistant_name == "Jarvis"
+        assert judge.config.assistant_name == "Volt AI"
 
     def test_init_with_config(self):
         """Can initialize with custom config."""

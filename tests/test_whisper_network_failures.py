@@ -51,8 +51,8 @@ def test_network_wrapper_keeps_rate_limit_priority_and_terminates_with_cycles():
 
 
 @pytest.mark.parametrize('category,actions', [
-    ('certificate', ('certificate', 'proxy', 'trust', 'restart jarvis')),
-    ('network', ('connection', 'proxy', 'restart jarvis', 'resume')),
+    ('certificate', ('certificate', 'proxy', 'trust', 'restart volt ai')),
+    ('network', ('connection', 'proxy', 'restart volt ai', 'resume')),
 ])
 def test_network_failure_explains_safe_recovery_and_retains_cache(monkeypatch, tmp_path, capsys, category, actions):
     cached = tmp_path / 'model.bin'
