@@ -97,8 +97,21 @@ def friendly_error(exc: Exception) -> str:
     return "Something went wrong talking to Claude. Try again."
 
 
-def reply(turns: list[dict], model: str, api_key: str, client=None) -> str:
-    """Ask Claude for the next assistant turn. Raises on API errors."""
+class Stopped(Exception):
+    """The user pressed Stop while Claude was writing."""
+
+    def __init__(self, partial: str):
+        super().__init__("stopped")
+        self.partial = partial
+
+
+def reply(turns: list[dict], model: str, api_key: str, client=None,
+          on_text=None, should_stop=None) -> str:
+    """Ask Claude for the next assistant turn. Raises on API errors.
+
+    ``on_text(text_so_far)`` is called as words arrive; ``should_stop()`` is
+    polled between chunks and raises :class:`Stopped` with the partial text.
+    """
     if model not in MODELS:
         model = DEFAULT_MODEL
     if client is None:
@@ -116,6 +129,13 @@ def reply(turns: list[dict], model: str, api_key: str, client=None) -> str:
         betas=["server-side-fallback-2026-07-01"],
         fallbacks="default",
     ) as stream:
+        written = ""
+        for chunk in stream.text_stream:
+            written += chunk
+            if on_text is not None:
+                on_text(written)
+            if should_stop is not None and should_stop():
+                raise Stopped(written)
         message = stream.get_final_message()
     if message.stop_reason == "refusal":
         return "Claude declined to answer that one. Try rephrasing your request."

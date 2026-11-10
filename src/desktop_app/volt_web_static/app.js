@@ -47,7 +47,8 @@ function renderMarkdown(text) {
   for (let i = 0; i < parts.length; i++) {
     if (i % 3 === 1) continue;
     if (i % 3 === 2) {
-      html += `<div class="codeblock"><button type="button" class="copy">Copy</button><pre><code>${escapeHtml(parts[i])}</code></pre></div>`;
+      const lang = escapeHtml(parts[i - 1] || "");
+      html += `<div class="codeblock"><div class="code-head"><span>${lang || "code"}</span><button type="button" class="copy">Copy</button></div><pre><code>${escapeHtml(parts[i])}</code></pre></div>`;
       continue;
     }
     const lines = escapeHtml(parts[i]).split("\n");
@@ -106,9 +107,16 @@ function messageNode(m) {
     row.appendChild(av);
   }
   const bubble = document.createElement("div"); bubble.className = "bubble";
-  if (m.status === "pending" || m.status === "pending_image") {
+  if (m.status === "pending" && m.text) {
+    // Claude is writing: show what has arrived so far.
+    // Close a code block that is still being written so it renders as code.
+    const open = (m.text.match(/```/g) || []).length % 2 === 1;
+    bubble.innerHTML = renderMarkdown(open ? m.text + "\n```" : m.text) + '<span class="cursor" aria-hidden="true"></span>';
+  } else if (m.status === "pending" || m.status === "pending_image") {
+    const secs = elapsed(m);
+    const label = m.status === "pending_image" ? "Creating your image" : "Thinking";
     bubble.innerHTML = '<span class="thinking"><i></i><i></i><i></i></span>' +
-      (m.status === "pending_image" ? ' <small>Creating your image…</small>' : "");
+      ` <small class="wait">${label}…${secs >= 3 ? ` ${secs}s` : ""}</small>`;
   } else if (m.image) {
     const src = `/images/${encodeURIComponent(m.image)}`;
     bubble.innerHTML = `<a href="${src}" target="_blank" rel="noopener"><img class="gen-image" alt="" src="${src}"></a>`;
@@ -126,15 +134,27 @@ function messageNode(m) {
     bubble.textContent = m.text;
   }
   bubble.querySelectorAll(".codeblock .copy").forEach((btn) => {
-    btn.onclick = () => copyText(btn.nextElementSibling.textContent, btn);
+    btn.onclick = () => copyText(btn.closest(".codeblock").querySelector("code").textContent, btn);
   });
   row.appendChild(bubble);
   return row;
 }
+function elapsed(m) { return Math.max(0, Math.round(Date.now() / 1000 - (m.created || Date.now() / 1000))); }
+function messageKey(m) {
+  const tick = m.status && m.status.startsWith("pending") && !m.text ? elapsed(m) : "";
+  return `${m.id}|${m.status}|${(m.text || "").length}|${m.image || ""}|${tick}`;
+}
 function renderMessages() {
   const atBottom = els.thread.scrollHeight - els.thread.scrollTop - els.thread.clientHeight < 80;
-  els.messages.innerHTML = "";
-  for (const m of state.messages) els.messages.appendChild(messageNode(m));
+  // Only rebuild messages that changed, so live replies don't flicker.
+  const nodes = els.messages.children;
+  state.messages.forEach((m, i) => {
+    const key = messageKey(m);
+    if (nodes[i] && nodes[i].dataset.key === key) return;
+    const node = messageNode(m); node.dataset.key = key;
+    if (nodes[i]) els.messages.replaceChild(node, nodes[i]); else els.messages.appendChild(node);
+  });
+  while (nodes.length > state.messages.length) els.messages.lastChild.remove();
   els.welcome.hidden = state.messages.length > 0;
   els.title.textContent = state.current && state.messages.length ? state.current.title : "Volt AI";
   if (atBottom || busy()) els.thread.scrollTop = els.thread.scrollHeight;
@@ -147,6 +167,11 @@ function updateComposer() {
   els.send.hidden = pending;
   els.send.disabled = !els.input.value.trim();
   const claude = !!(state.claude && state.claude.active);
+  const brain = $("brainBtn");
+  brain.hidden = !(state.claude && state.claude.has_key);
+  brain.textContent = claude ? "⚡ Claude" : "💻 Free brain";
+  brain.setAttribute("aria-pressed", String(claude));
+  brain.title = claude ? "Answering with Claude (paid). Tap to use the free brain." : "Answering with the free brain on your computer. Tap to use Claude.";
   const ready = claude || state.available;
   els.status.textContent = claude ? "Claude" : ready ? "" : "Starting…";
   els.status.className = "status" + (ready ? "" : " off");
@@ -162,13 +187,13 @@ async function loadChats() { state.chats = (await api("/api/chats")).chats; rend
 async function openChat(id) {
   const data = await api(`/api/chats/${id}`);
   state.current = data.chat; state.messages = data.messages;
-  localStorage.setItem("volt.lastChat", id);
+  try { localStorage.setItem("volt.lastChat", id); } catch (_) { /* storage blocked */ }
   renderChatList(); renderMessages(); closeMenu(); schedulePoll();
   els.thread.scrollTop = els.thread.scrollHeight;
 }
 function newChat() {
   state.current = null; state.messages = [];
-  localStorage.removeItem("volt.lastChat");
+  try { localStorage.removeItem("volt.lastChat"); } catch (_) { /* storage blocked */ }
   renderChatList(); renderMessages(); closeMenu(); els.input.focus();
 }
 async function ensureChat() {
@@ -212,7 +237,7 @@ function schedulePoll() {
         if (!busy()) loadChats();
       } catch (_) { /* retry next tick */ }
       schedulePoll();
-    }, 1200);
+    }, 500);
   }
 }
 function setImageMode(on) {
@@ -332,6 +357,14 @@ els.input.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey && !e.isComposing && window.matchMedia("(min-width: 761px)").matches) submit(e);
 });
 els.stop.onclick = stop;
+$("brainBtn").onclick = async () => {
+  const want = !(state.claude && state.claude.active);
+  try {
+    const r = await api("/api/brain", { method: "POST", body: { claude: want } });
+    state.claude.active = r.active; updateComposer();
+    toast(r.active ? "Now answering with Claude." : "Now answering with the free brain.");
+  } catch (err) { toast(err.message); }
+};
 els.imageMode.onclick = () => setImageMode(els.imageMode.getAttribute("aria-pressed") !== "true");
 $("newChat").onclick = newChat;
 $("openSidebar").onclick = openMenu;
@@ -363,7 +396,8 @@ document.querySelectorAll(".suggestions button").forEach((b) => {
   greet();
   await refreshState().catch(() => {});
   await loadChats();
-  const last = localStorage.getItem("volt.lastChat");
+  let last = null;
+  try { last = (location.hash.match(/chat=([0-9a-f]+)/) || [])[1] || localStorage.getItem("volt.lastChat"); } catch (_) { /* storage blocked */ }
   if (last && state.chats.some((c) => c.id === last)) await openChat(last); else renderMessages();
   setInterval(() => refreshState().catch(() => {}), 10000);
 })();

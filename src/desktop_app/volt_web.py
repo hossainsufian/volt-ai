@@ -220,13 +220,31 @@ class VoltWebServer:
         try:
             if not key:
                 raise RuntimeError("no key")
+            last = [0.0]
+
+            def on_text(text: str) -> None:
+                now = time.monotonic()
+                if now - last[0] >= 0.25:  # don't hammer the database
+                    last[0] = now
+                    current = self.store.get_message(message_id)
+                    if current and current["status"] == "pending":
+                        self.store.update_message(message_id, text=text, status="pending")
+
+            def should_stop() -> bool:
+                current = self.store.get_message(message_id)
+                return not current or current["status"] != "pending"
+
             answer = volt_claude.reply(
                 self.store.conversation_for_restore(chat_id),
                 self.settings.get("claude_model", volt_claude.DEFAULT_MODEL),
                 key,
                 client=self._claude_client,
+                on_text=on_text,
+                should_stop=should_stop,
             )
             status = "done"
+        except volt_claude.Stopped:
+            return  # the Stop handler already saved what was written
         except Exception as exc:
             debug_log(f"volt claude request failed: {type(exc).__name__}", "volt")
             answer = (volt_claude.friendly_error(exc) if key
@@ -463,6 +481,15 @@ class VoltWebServer:
             changes = request.get_json(silent=True) or {}
             return jsonify(settings=server.update_settings(**changes))
 
+        @app.post("/api/brain")
+        def brain():
+            require_auth()
+            use_claude = bool((request.get_json(silent=True) or {}).get("claude"))
+            if use_claude and volt_claude.load_key() is None:
+                return jsonify(error="Add your Claude API key in Settings on the laptop first."), 400
+            server.update_settings(claude_enabled=use_claude)
+            return jsonify(active=server.claude_active())
+
         @app.post("/api/claude/key")
         def claude_key():
             require_auth()
@@ -583,7 +610,12 @@ class VoltWebServer:
             server.bridge.cancel()
             pending = server.store.pending_message()
             if pending is not None and pending["status"] == "pending":
-                server.store.update_message(pending["id"], text="Stopped.", status="error")
+                partial = (pending.get("text") or "").strip()
+                if partial:
+                    server.store.update_message(pending["id"], text=partial + "\n\n_(Stopped.)_",
+                                                status="done")
+                else:
+                    server.store.update_message(pending["id"], text="Stopped.", status="error")
             return jsonify(ok=True)
 
         @app.get("/api/images")
