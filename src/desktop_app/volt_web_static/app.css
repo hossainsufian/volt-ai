@@ -209,3 +209,5 @@ menu { display: flex; justify-content: flex-end; padding: 0; margin: 18px 0 0; }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 .key-input { flex: 1 1 220px; min-width: 0; padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper, #fff); color: inherit; font: inherit; }
 #claudeModel { padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: transparent; color: inherit; font: inherit; }
+select.chip.brain { appearance: none; -webkit-appearance: none; cursor: pointer; padding-right: 26px; font: inherit; font-size: 14px;
+  background: transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23999'/%3E%3C/svg%3E") no-repeat right 10px center; }

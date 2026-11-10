@@ -2357,7 +2357,7 @@ class JarvisSystemTray:
 
     def show_chat(self) -> None:
         """Show the Volt AI chat window (falls back to the classic chat)."""
-        if self.volt_web is not None:
+        if getattr(self, "volt_web", None) is not None:
             try:
                 from desktop_app.volt_window import VoltChatWindow
                 if self.volt_window is None:
@@ -2890,7 +2890,7 @@ class JarvisSystemTray:
         Creates the chat window lazily (safe on the GUI thread) and forwards
         the line to ``ChatWindow.process_ipc_line`` for parsing + signal emit.
         """
-        if self.volt_web is not None:
+        if getattr(self, "volt_web", None) is not None:
             _forward_chat_event_to_volt(self.volt_web, line)
         if self.chat_window is None:
             from desktop_app.chat_window import ChatWindow

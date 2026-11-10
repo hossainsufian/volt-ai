@@ -31,7 +31,7 @@ from typing import Callable, Optional, Protocol
 
 from jarvis.debug import debug_log
 
-from desktop_app import volt_claude
+from desktop_app import volt_claude, volt_fast
 from desktop_app.volt_store import VoltStore
 
 STATIC_DIR = Path(__file__).parent / "volt_web_static"
@@ -47,7 +47,9 @@ DEFAULT_SETTINGS = {
     "phone_access": False,
     "claude_enabled": False,
     "claude_model": volt_claude.DEFAULT_MODEL,
+    "local_mode": "fast",  # "fast": one direct model call; "smart": full pipeline with tools
 }
+LOCAL_MODES = ("fast", "smart")
 
 
 class VoltBridge(Protocol):
@@ -97,6 +99,7 @@ class VoltWebServer:
         self.port = port
         self._http_get = http_get
         self._claude_client = None  # tests inject a fake client
+        self._fast_post = None  # tests inject a fake HTTP post for fast mode
         self._lock = threading.RLock()
         self._settings_path = store.data_dir / "settings.json"
         self._devices_path = store.data_dir / "devices.json"
@@ -136,6 +139,9 @@ class VoltWebServer:
             for key, value in changes.items():
                 if key == "claude_model":
                     if value in volt_claude.MODELS:
+                        self.settings[key] = value
+                elif key == "local_mode":
+                    if value in LOCAL_MODES:
                         self.settings[key] = value
                 elif key in DEFAULT_SETTINGS:
                     self.settings[key] = bool(value)
@@ -178,9 +184,17 @@ class VoltWebServer:
     def claude_active(self) -> bool:
         return bool(self.settings.get("claude_enabled")) and volt_claude.load_key() is not None
 
-    def _send(self, chat_id: str, text: str) -> tuple[dict, int]:
+    def brain(self) -> str:
+        """Which brain answers the next message: "claude", "fast" or "smart"."""
         if self.claude_active():
-            return self._send_claude(chat_id, text)
+            return "claude"
+        mode = self.settings.get("local_mode", "fast")
+        return mode if mode in LOCAL_MODES else "fast"
+
+    def _send(self, chat_id: str, text: str) -> tuple[dict, int]:
+        brain = self.brain()
+        if brain in ("claude", "fast"):
+            return self._send_streamed(chat_id, text, brain)
         if not self.bridge.is_available():
             return {"error": "Volt AI is starting or stopped. Try again in a moment."}, 503
         if self.store.pending_message() is not None:
@@ -200,7 +214,7 @@ class VoltWebServer:
         debug_log(f"volt chat message submitted to chat {chat_id}", "volt")
         return {"user": user, "reply": self.store.get_message(pending["id"])}, 200
 
-    def _send_claude(self, chat_id: str, text: str) -> tuple[dict, int]:
+    def _send_streamed(self, chat_id: str, text: str, brain: str) -> tuple[dict, int]:
         if self.store.pending_message() is not None:
             return {"error": "Volt AI is still answering. Wait for the reply first."}, 409
         if self.store.get_chat(chat_id) is None:
@@ -211,14 +225,14 @@ class VoltWebServer:
             user = self.store.add_message(chat_id, "user", text)
             pending = self.store.add_message(chat_id, "assistant", "", status="pending")
         threading.Thread(
-            target=self._claude_worker, args=(chat_id, pending["id"]), daemon=True
+            target=self._stream_worker, args=(chat_id, pending["id"], brain), daemon=True
         ).start()
         return {"user": user, "reply": self.store.get_message(pending["id"])}, 200
 
-    def _claude_worker(self, chat_id: str, message_id: int) -> None:
-        key = volt_claude.load_key()
+    def _stream_worker(self, chat_id: str, message_id: int, brain: str) -> None:
+        key = volt_claude.load_key() if brain == "claude" else None
         try:
-            if not key:
+            if brain == "claude" and not key:
                 raise RuntimeError("no key")
             last = [0.0]
 
@@ -234,21 +248,29 @@ class VoltWebServer:
                 current = self.store.get_message(message_id)
                 return not current or current["status"] != "pending"
 
-            answer = volt_claude.reply(
-                self.store.conversation_for_restore(chat_id),
-                self.settings.get("claude_model", volt_claude.DEFAULT_MODEL),
-                key,
-                client=self._claude_client,
-                on_text=on_text,
-                should_stop=should_stop,
-            )
+            turns = self.store.conversation_for_restore(chat_id)
+            if brain == "claude":
+                answer = volt_claude.reply(
+                    turns,
+                    self.settings.get("claude_model", volt_claude.DEFAULT_MODEL),
+                    key,
+                    client=self._claude_client,
+                    on_text=on_text,
+                    should_stop=should_stop,
+                )
+            else:
+                answer = volt_fast.reply(turns, on_text=on_text, should_stop=should_stop,
+                                         post=self._fast_post)
             status = "done"
         except volt_claude.Stopped:
             return  # the Stop handler already saved what was written
         except Exception as exc:
-            debug_log(f"volt claude request failed: {type(exc).__name__}", "volt")
-            answer = (volt_claude.friendly_error(exc) if key
-                      else "Add your Claude API key in Settings first.")
+            debug_log(f"volt {brain} request failed: {type(exc).__name__}", "volt")
+            if brain == "fast":
+                answer = volt_fast.friendly_error(exc)
+            else:
+                answer = (volt_claude.friendly_error(exc) if key
+                          else "Add your Claude API key in Settings first.")
             status = "error"
         current = self.store.get_message(message_id)
         if current and current["status"] == "pending":  # not stopped meanwhile
@@ -465,6 +487,7 @@ class VoltWebServer:
                 tailscale_url=server.tailscale_url(),
                 pairing_code=server.pairing_code if is_local() else None,
                 devices=len(server._devices),
+                brain=server.brain(),
                 claude={
                     "active": server.claude_active(),
                     "has_key": volt_claude.load_key() is not None,
@@ -484,11 +507,16 @@ class VoltWebServer:
         @app.post("/api/brain")
         def brain():
             require_auth()
-            use_claude = bool((request.get_json(silent=True) or {}).get("claude"))
-            if use_claude and volt_claude.load_key() is None:
-                return jsonify(error="Add your Claude API key in Settings on the laptop first."), 400
-            server.update_settings(claude_enabled=use_claude)
-            return jsonify(active=server.claude_active())
+            want = str((request.get_json(silent=True) or {}).get("brain", ""))
+            if want == "claude":
+                if volt_claude.load_key() is None:
+                    return jsonify(error="Add your Claude API key in Settings on the laptop first."), 400
+                server.update_settings(claude_enabled=True)
+            elif want in LOCAL_MODES:
+                server.update_settings(claude_enabled=False, local_mode=want)
+            else:
+                return jsonify(error="Unknown brain."), 400
+            return jsonify(brain=server.brain(), active=server.claude_active())
 
         @app.post("/api/claude/key")
         def claude_key():
@@ -655,6 +683,9 @@ class VoltWebServer:
         from werkzeug.serving import make_server
 
         host = "0.0.0.0" if self.settings.get("phone_access") else "127.0.0.1"
+        if self.brain() == "fast":
+            # Load the model now so the first message doesn't wait for it.
+            threading.Thread(target=volt_fast.warm_up, daemon=True).start()
         for port in (self.port, *range(self.port + 1, self.port + 20)):
             try:
                 self._server = make_server(host, port, self.app, threaded=True)

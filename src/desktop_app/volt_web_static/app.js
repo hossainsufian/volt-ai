@@ -166,14 +166,20 @@ function updateComposer() {
   els.stop.hidden = !pending;
   els.send.hidden = pending;
   els.send.disabled = !els.input.value.trim();
-  const claude = !!(state.claude && state.claude.active);
-  const brain = $("brainBtn");
-  brain.hidden = !(state.claude && state.claude.has_key);
-  brain.textContent = claude ? "⚡ Claude" : "💻 Free brain";
-  brain.setAttribute("aria-pressed", String(claude));
-  brain.title = claude ? "Answering with Claude (paid). Tap to use the free brain." : "Answering with the free brain on your computer. Tap to use Claude.";
-  const ready = claude || state.available;
-  els.status.textContent = claude ? "Claude" : ready ? "" : "Starting…";
+  const brain = state.brain || "fast";
+  const claude = brain === "claude";
+  const sel = $("brainSel");
+  const hasKey = !!(state.claude && state.claude.has_key);
+  const claudeOpt = sel.querySelector('option[value="claude"]');
+  claudeOpt.disabled = !hasKey;  // <option hidden> is ignored by some phone browsers
+  claudeOpt.textContent = hasKey ? "✨ Claude" : "✨ Claude (needs key)";
+  if (document.activeElement !== sel) sel.value = brain;
+  sel.title = { fast: "Fast: quick answers from this computer. Private, no web search.",
+    smart: "Smart: can search the web and remember things, but much slower.",
+    claude: "Claude: strongest for coding. Paid, sent to Anthropic." }[brain];
+  // Fast and Claude don't need the full assistant to be running.
+  const ready = brain !== "smart" || state.available;
+  els.status.textContent = ready ? "" : "Starting…";
   els.status.className = "status" + (ready ? "" : " off");
 }
 async function copyText(text, btn) {
@@ -268,6 +274,7 @@ async function refreshState() {
   $("pairCode").textContent = s.pairing_code || "";
   els.imageMode.hidden = !s.settings.images_enabled;
   state.claude = s.claude || {};
+  state.brain = s.brain || "fast";
   renderClaude(s);
   updateComposer();
 }
@@ -357,13 +364,15 @@ els.input.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey && !e.isComposing && window.matchMedia("(min-width: 761px)").matches) submit(e);
 });
 els.stop.onclick = stop;
-$("brainBtn").onclick = async () => {
-  const want = !(state.claude && state.claude.active);
+$("brainSel").onchange = async (e) => {
+  const want = e.target.value;
   try {
-    const r = await api("/api/brain", { method: "POST", body: { claude: want } });
-    state.claude.active = r.active; updateComposer();
-    toast(r.active ? "Now answering with Claude." : "Now answering with the free brain.");
-  } catch (err) { toast(err.message); }
+    const r = await api("/api/brain", { method: "POST", body: { brain: want } });
+    state.brain = r.brain; state.claude.active = r.active; updateComposer();
+    toast({ fast: "Fast mode: quick answers from this computer.",
+      smart: "Smart mode: web search and memory, but slower.",
+      claude: "Claude: best for coding (paid)." }[r.brain]);
+  } catch (err) { toast(err.message); e.target.value = state.brain || "fast"; }
 };
 els.imageMode.onclick = () => setImageMode(els.imageMode.getAttribute("aria-pressed") !== "true");
 $("newChat").onclick = newChat;
