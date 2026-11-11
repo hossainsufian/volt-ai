@@ -74,6 +74,12 @@ from desktop_app.face_widget import FaceWindow
 
 _LOG_SEPARATOR = "─" * 50
 
+# A voice service that crashes is started again automatically, but one that
+# keeps crashing is left off so it can't loop forever.
+DAEMON_AUTO_RESTART_LIMIT = 3
+DAEMON_AUTO_RESTART_WINDOW_SEC = 600
+DAEMON_AUTO_RESTART_DELAY_MS = 3000
+
 
 @dataclass
 class OllamaRuntimeOwnership:
@@ -2641,6 +2647,7 @@ class JarvisSystemTray:
 
     def toggle_listening(self) -> None:
         """Toggle the Jarvis daemon on/off."""
+        self._auto_restart_pending = False  # the user's choice wins
         if self.is_listening:
             self.stop_daemon()
         else:
@@ -3166,6 +3173,31 @@ class JarvisSystemTray:
             if diary_dialog:
                 diary_dialog.close()
 
+    def _restart_after_crash(self) -> bool:
+        """Schedule a restart of a crashed daemon unless it keeps crashing."""
+        now = time.monotonic()
+        recent = [t for t in getattr(self, "_auto_restart_times", [])
+                  if now - t < DAEMON_AUTO_RESTART_WINDOW_SEC]
+        if len(recent) >= DAEMON_AUTO_RESTART_LIMIT:
+            self._auto_restart_times = recent
+            debug_log("daemon keeps crashing; not restarting it again", "desktop")
+            self.log_signals.new_log.emit("❌ The voice service keeps crashing, so it was left off.\n")
+            return False
+        recent.append(now)
+        self._auto_restart_times = recent
+        self._auto_restart_pending = True
+        debug_log(f"daemon crashed; restarting it ({len(recent)}/{DAEMON_AUTO_RESTART_LIMIT})", "desktop")
+        self.log_signals.new_log.emit("🔄 The voice service crashed. Restarting it...\n")
+        QTimer.singleShot(DAEMON_AUTO_RESTART_DELAY_MS, self._auto_restart_daemon)
+        return True
+
+    def _auto_restart_daemon(self) -> None:
+        if not getattr(self, "_auto_restart_pending", False):
+            return  # the user turned Volt on or off in the meantime
+        self._auto_restart_pending = False
+        if not self.is_listening and not self._daemon_alive():
+            self.start_daemon()
+
     def check_daemon_status(self) -> None:
         """Check if the daemon process/thread is still running."""
         if self.is_bundled and self.daemon_thread:
@@ -3174,13 +3206,15 @@ class JarvisSystemTray:
                 unexpected = self.is_listening and not self._daemon_stop_expected
                 self._on_daemon_finished(worker)
                 if unexpected:
+                    debug_log("daemon thread ended unexpectedly", "desktop")
+                    restarting = self._restart_after_crash()
                     self.tray_icon.showMessage(
                         "Volt AI Stopped",
-                        "Voice assistant process ended unexpectedly",
+                        "Voice assistant crashed. Restarting it..." if restarting
+                        else "Voice assistant process ended unexpectedly",
                         QSystemTrayIcon.MessageIcon.Warning,
                         3000
                     )
-                    debug_log("daemon thread ended unexpectedly", "desktop")
         elif self.daemon_process:
             # Check if process is still alive
             poll = self.daemon_process.poll()
@@ -3197,14 +3231,15 @@ class JarvisSystemTray:
                     # Reset face to asleep so it doesn't look ready while daemon is down
                     self._set_face_asleep()
 
+                    debug_log(f"daemon process ended unexpectedly (code {poll})", "desktop")
+                    restarting = self._restart_after_crash()
                     self.tray_icon.showMessage(
                         "Volt AI Stopped",
-                        "Voice assistant process ended unexpectedly",
+                        "Voice assistant crashed. Restarting it..." if restarting
+                        else "Voice assistant process ended unexpectedly",
                         QSystemTrayIcon.MessageIcon.Warning,
                         3000
                     )
-
-                    debug_log("daemon process ended unexpectedly", "desktop")
 
         self._sync_voice_pause_controls()
 

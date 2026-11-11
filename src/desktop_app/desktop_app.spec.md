@@ -494,6 +494,14 @@ A Flask-based web interface for browsing conversation history:
 
 ## Error Handling
 
+### Voice Service Auto-Restart
+
+When the daemon ends unexpectedly while listening is on, the tray shows a
+warning and starts the daemon again after a short delay
+(`DAEMON_AUTO_RESTART_DELAY_MS`). A daemon that crashes
+`DAEMON_AUTO_RESTART_LIMIT` times within `DAEMON_AUTO_RESTART_WINDOW_SEC` is
+left off. Turning Volt on or off from the tray cancels a pending restart.
+
 ### Crash Detection
 
 1. On startup, creates a `.crash_marker` file

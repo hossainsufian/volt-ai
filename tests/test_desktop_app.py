@@ -1863,6 +1863,57 @@ class TestListeningWindowVisibility:
         assert tray.toggle_action.text() == "▶️ Turn On"
         fake_state.set_state.assert_called_once_with(JarvisState.ASLEEP)
 
+    def _crashed_tray(self, monkeypatch):
+        import desktop_app.app as app_mod
+        from PyQt6.QtGui import QAction
+
+        tray = app_mod.JarvisSystemTray.__new__(app_mod.JarvisSystemTray)
+        tray.is_bundled = False
+        tray.daemon_thread = None
+        tray.log_viewer = MagicMock()
+        tray.face_window = MagicMock()
+        tray.log_signals = MagicMock()
+        tray.tray_icon = MagicMock()
+        tray.toggle_action = QAction("⏻ Turn Off")
+        tray.status_action = MagicMock()
+        tray.update_icon = MagicMock()
+        tray._set_chat_daemon_status = MagicMock()
+        tray._daemon_stop_expected = False
+        tray._initialise_voice_pause_controls()
+        self._patch_face_state(monkeypatch)
+        # Run the delayed restart straight away.
+        monkeypatch.setattr(app_mod.QTimer, "singleShot", lambda ms, fn: fn())
+        starts = []
+
+        def fake_start():
+            starts.append(1)
+            tray.is_listening = True
+
+        tray.start_daemon = fake_start
+
+        def crash():
+            tray.is_listening = True
+            tray._chat_submit_fn = lambda text: None
+            proc = MagicMock()
+            proc.poll.return_value = -11  # segmentation fault
+            tray.daemon_process = proc
+            tray.check_daemon_status()
+
+        return tray, starts, crash
+
+    def test_crashed_voice_service_restarts_itself(self, qapp, monkeypatch):
+        tray, starts, crash = self._crashed_tray(monkeypatch)
+        crash()
+        assert starts == [1]
+
+    def test_voice_service_that_keeps_crashing_is_left_off(self, qapp, monkeypatch):
+        import desktop_app.app as app_mod
+
+        tray, starts, crash = self._crashed_tray(monkeypatch)
+        for _ in range(app_mod.DAEMON_AUTO_RESTART_LIMIT + 2):
+            crash()
+        assert len(starts) == app_mod.DAEMON_AUTO_RESTART_LIMIT
+
     def test_stop_daemon_subprocess_does_not_hide_windows(self, qapp, monkeypatch):
         tray, fake_dialog = self._tray_for_stop_subprocess(monkeypatch)
         tray.stop_daemon(show_diary_dialog=True)
