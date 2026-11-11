@@ -54,6 +54,7 @@
           <textarea id="input" rows="1" placeholder="Message Volt AI…" aria-label="Message Volt AI"></textarea>
           <div class="composer-row">
             <button type="button" class="chip" id="imageMode" aria-pressed="false" title="Create an image">🎨 Image</button>
+            <button type="button" class="chip" id="artifactMode" aria-pressed="false" title="Build a web page, app, game or chart you can open and use">🧩 Artifact</button>
             <select class="chip brain" id="brainSel" aria-label="Which brain answers" title="Which brain answers">
               <option value="fast">⚡ Fast</option>
               <option value="smart">🧠 Smart</option>
@@ -67,6 +68,20 @@
         <p class="fineprint">Volt AI can make mistakes. Check important facts.</p>
       </footer>
     </main>
+    <aside class="artifact" id="artifact" aria-label="Artifact" hidden>
+      <header class="artifact-head">
+        <strong id="artifactTitle">Artifact</strong>
+        <div class="artifact-tabs" role="tablist">
+          <button type="button" id="artTabPreview" role="tab" aria-selected="true">Preview</button>
+          <button type="button" id="artTabCode" role="tab" aria-selected="false">Code</button>
+        </div>
+        <button type="button" class="art-btn" id="artCopy">Copy</button>
+        <button type="button" class="art-btn" id="artDownload" title="Download as a file">⬇</button>
+        <button type="button" class="art-btn" id="artClose" aria-label="Close">✕</button>
+      </header>
+      <iframe id="artFrame" title="Artifact preview" sandbox="allow-scripts allow-forms allow-modals allow-popups allow-downloads"></iframe>
+      <pre class="artifact-code" id="artCode" hidden><code></code></pre>
+    </aside>
   </div>
 
   <dialog id="settings" class="sheet">

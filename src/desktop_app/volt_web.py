@@ -15,6 +15,14 @@ Access control
 * Every API call and image needs a valid token; failed pairing attempts are
   rate-limited.
 
+Artifact mode
+-------------
+A message sent with ``artifact: true`` asks the model for one self-contained
+HTML file (``volt_fast.ARTIFACT_PROMPT``). It always goes to a direct brain
+(Fast or Claude), never the assistant pipeline. The page previews it in a
+sandboxed frame with an opaque origin, so artifact code can't reach Volt's
+API or cookies.
+
 The AI itself is reached through a *bridge* supplied by the desktop app
 (see ``VoltBridge``) so this module never talks to the daemon directly.
 """
@@ -222,10 +230,12 @@ class VoltWebServer:
         mode = self.settings.get("local_mode", "fast")
         return mode if mode in LOCAL_MODES else "fast"
 
-    def _send(self, chat_id: str, text: str) -> tuple[dict, int]:
+    def _send(self, chat_id: str, text: str, artifact: bool = False) -> tuple[dict, int]:
         brain = self.brain()
+        if artifact and brain == "smart":
+            brain = "fast"  # artifacts need the model's raw answer, not the assistant pipeline
         if brain in ("claude", "fast"):
-            return self._send_streamed(chat_id, text, brain)
+            return self._send_streamed(chat_id, text, brain, artifact)
         if not self.bridge.is_available():
             return {"error": "Volt AI is starting or stopped. Try again in a moment."}, 503
         if self.store.pending_message() is not None:
@@ -245,7 +255,8 @@ class VoltWebServer:
         debug_log(f"volt chat message submitted to chat {chat_id}", "volt")
         return {"user": user, "reply": self.store.get_message(pending["id"])}, 200
 
-    def _send_streamed(self, chat_id: str, text: str, brain: str) -> tuple[dict, int]:
+    def _send_streamed(self, chat_id: str, text: str, brain: str,
+                       artifact: bool = False) -> tuple[dict, int]:
         if self.store.pending_message() is not None:
             return {"error": "Volt AI is still answering. Wait for the reply first."}, 409
         if self.store.get_chat(chat_id) is None:
@@ -256,11 +267,12 @@ class VoltWebServer:
             user = self.store.add_message(chat_id, "user", text)
             pending = self.store.add_message(chat_id, "assistant", "", status="pending")
         threading.Thread(
-            target=self._stream_worker, args=(chat_id, pending["id"], brain), daemon=True
+            target=self._stream_worker, args=(chat_id, pending["id"], brain, artifact), daemon=True
         ).start()
         return {"user": user, "reply": self.store.get_message(pending["id"])}, 200
 
-    def _stream_worker(self, chat_id: str, message_id: int, brain: str) -> None:
+    def _stream_worker(self, chat_id: str, message_id: int, brain: str,
+                       artifact: bool = False) -> None:
         key = volt_claude.load_key() if brain == "claude" else None
         try:
             if brain == "claude" and not key:
@@ -284,8 +296,12 @@ class VoltWebServer:
             if self.settings.get("system_analysis") and (
                     brain == "claude" or volt_system.is_about_computer(question)):
                 extra = volt_system.prompt_block("" if brain == "claude" else question)
-                if brain == "claude":
-                    extra = "\n\n" + extra
+            if artifact:
+                extra = (extra + "\n\n" if extra else "") + volt_fast.ARTIFACT_PROMPT
+                if brain == "fast":
+                    turns = turns[-volt_fast.ARTIFACT_TURNS:]
+            if brain == "claude" and extra and not extra.startswith("\n"):
+                extra = "\n\n" + extra
             if brain == "claude":
                 answer = volt_claude.reply(
                     turns,
@@ -674,10 +690,11 @@ class VoltWebServer:
         @app.post("/api/chats/<chat_id>/messages")
         def send(chat_id):
             require_auth()
-            text = str((request.get_json(silent=True) or {}).get("text", "")).strip()
+            data = request.get_json(silent=True) or {}
+            text = str(data.get("text", "")).strip()
             if not text:
                 return jsonify(error="Type a message first."), 400
-            body, status = server._send(chat_id, text[:20000])
+            body, status = server._send(chat_id, text[:20000], artifact=bool(data.get("artifact")))
             return jsonify(body), status
 
         @app.post("/api/chats/<chat_id>/images")

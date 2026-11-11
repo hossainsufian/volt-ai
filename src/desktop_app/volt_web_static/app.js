@@ -12,6 +12,7 @@ const els = {
   app: $("app"), list: $("chatList"), messages: $("messages"), welcome: $("welcome"),
   thread: $("thread"), title: $("chatTitle"), status: $("status"), input: $("input"),
   form: $("composer"), send: $("sendBtn"), stop: $("stopBtn"), imageMode: $("imageMode"),
+  artifactMode: $("artifactMode"),
 };
 let state = { chats: [], current: null, messages: [], available: false, settings: {}, local: false, claude: {} };
 let pollTimer = null;
@@ -136,6 +137,17 @@ function messageNode(m) {
   bubble.querySelectorAll(".codeblock .copy").forEach((btn) => {
     btn.onclick = () => copyText(btn.closest(".codeblock").querySelector("code").textContent, btn);
   });
+  if (m.role === "assistant" && !String(m.status || "").startsWith("pending")) {
+    bubble.querySelectorAll(".codeblock").forEach((block) => {
+      const code = block.querySelector("code").textContent;
+      const lang = block.querySelector(".code-head span").textContent.toLowerCase();
+      if (!isPreviewable(lang, code)) return;
+      const btn = document.createElement("button");
+      btn.type = "button"; btn.className = "preview"; btn.textContent = "▶ Preview";
+      btn.onclick = () => openArtifact(code, lang);
+      block.querySelector(".code-head").insertBefore(btn, block.querySelector(".copy"));
+    });
+  }
   row.appendChild(bubble);
   return row;
 }
@@ -225,7 +237,7 @@ async function submit(e) {
       await api(`/api/chats/${chat.id}/images`, { method: "POST", body: { prompt: text } });
       setImageMode(false);
     } else {
-      await api(`/api/chats/${chat.id}/messages`, { method: "POST", body: { text } });
+      await api(`/api/chats/${chat.id}/messages`, { method: "POST", body: { text, artifact: artifactOn() } });
     }
     await openChat(chat.id); loadChats();
   } catch (err) {
@@ -240,14 +252,79 @@ function schedulePoll() {
       try {
         const data = await api(`/api/chats/${state.current.id}`);
         state.current = data.chat; state.messages = data.messages; renderMessages();
-        if (!busy()) loadChats();
+        state.wasBusy = true;
+        if (!busy()) { loadChats(); maybeAutoOpenArtifact(); state.wasBusy = false; }
       } catch (_) { /* retry next tick */ }
       schedulePoll();
     }, 500);
   }
 }
+// --- Artifacts: web pages, apps and games Volt builds, shown live -------------------
+// The preview runs in a sandboxed frame with its own blank origin, so it can't
+// read Volt's chats, cookies or anything else on this page.
+const ART_KEY = "volt.artifactMode";
+let artifactCode = "", artifactLang = "html", autoOpened = new Set();
+function artifactOn() { return els.artifactMode.getAttribute("aria-pressed") === "true"; }
+function setArtifactMode(on) {
+  els.artifactMode.setAttribute("aria-pressed", String(on));
+  try { localStorage.setItem(ART_KEY, on ? "1" : "0"); } catch (_) { /* private mode */ }
+  if (on) setImageMode(false);
+}
+function isPreviewable(lang, code) {
+  if (lang === "html" || lang === "svg") return true;
+  return /^\s*(<!doctype html|<html|<svg)/i.test(code);
+}
+function artifactDocument(code, lang) {
+  if (lang === "svg" || /^\s*<svg/i.test(code)) {
+    return `<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><body style="margin:0;display:grid;place-items:center;min-height:100vh;background:#fff">${code}</body>`;
+  }
+  return code;
+}
+function openArtifact(code, lang) {
+  artifactCode = code; artifactLang = lang;
+  const title = (code.match(/<title>([^<]{1,80})<\/title>/i) || [])[1];
+  $("artifactTitle").textContent = title ? title.trim() : (lang === "svg" ? "Picture" : "Artifact");
+  $("artFrame").srcdoc = artifactDocument(code, lang);
+  $("artCode").querySelector("code").textContent = code;
+  showArtifactTab("preview");
+  $("artifact").hidden = false; els.app.classList.add("has-artifact");
+}
+function closeArtifact() {
+  $("artifact").hidden = true; els.app.classList.remove("has-artifact");
+  $("artFrame").srcdoc = "";
+}
+function showArtifactTab(tab) {
+  const preview = tab === "preview";
+  $("artFrame").hidden = !preview; $("artCode").hidden = preview;
+  $("artTabPreview").setAttribute("aria-selected", String(preview));
+  $("artTabCode").setAttribute("aria-selected", String(!preview));
+}
+function maybeAutoOpenArtifact() {
+  // Open the newest finished artifact once, right after Volt finishes it.
+  const last = state.messages[state.messages.length - 1];
+  if (!last || last.role !== "assistant" || last.status !== "done" || autoOpened.has(last.id)) return;
+  autoOpened.add(last.id);
+  if (!artifactOn() || !state.wasBusy) return;
+  const m = (last.text || "").match(/```(html|svg)\n?([\s\S]*?)```/i);
+  if (m) openArtifact(m[2], m[1].toLowerCase());
+}
+$("artTabPreview").onclick = () => showArtifactTab("preview");
+$("artTabCode").onclick = () => showArtifactTab("code");
+$("artClose").onclick = closeArtifact;
+$("artCopy").onclick = () => copyText(artifactCode, $("artCopy"));
+$("artDownload").onclick = () => {
+  const blob = new Blob([artifactDocument(artifactCode, artifactLang)], { type: "text/html" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = ($("artifactTitle").textContent.replace(/[^\w -]+/g, "").trim() || "artifact") + ".html";
+  a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
+els.artifactMode.onclick = () => setArtifactMode(!artifactOn());
+try { if (localStorage.getItem(ART_KEY) === "1") setArtifactMode(true); } catch (_) { /* private mode */ }
+
 function setImageMode(on) {
   els.imageMode.setAttribute("aria-pressed", String(on));
+  if (on && els.artifactMode) els.artifactMode.setAttribute("aria-pressed", "false");
   els.input.placeholder = on ? "Describe the image you want…" : "Message Volt AI…";
 }
 function autosize() {

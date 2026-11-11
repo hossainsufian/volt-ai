@@ -33,6 +33,18 @@ SYSTEM_PROMPT = (
 )
 
 
+ARTIFACT_PROMPT = (
+    "Artifact mode is ON: the user wants something they can see and use, such as a "
+    "web page, app, game, tool, chart, diagram or animation. Reply with one short "
+    "sentence, then the whole thing as ONE complete, self-contained HTML file in a "
+    "single ```html code block: CSS in a <style> tag and JavaScript in a <script> tag, "
+    "no other files, no placeholders, nothing left out. Make it look clean and modern, "
+    "fit a phone screen as well as a computer, and work without the internet when "
+    "possible. If the request is only a question, answer it normally instead."
+)
+ARTIFACT_TURNS = 4  # an HTML file is long, so send less chat history with it
+
+
 def _jarvis_config() -> dict:
     override = os.environ.get("JARVIS_CONFIG_PATH")
     if override:
