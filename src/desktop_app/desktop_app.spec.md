@@ -494,6 +494,13 @@ A Flask-based web interface for browsing conversation history:
 
 ## Error Handling
 
+### Chat Window at Launch
+
+The chat window opens at launch when the app is started with `--open-chat`
+(the app menu entry and the Windows "Volt AI" desktop shortcut pass it) or
+when `open_chat_on_start` is on. Starting with the computer passes no flag,
+so it stays in the tray when `open_chat_on_start` is off.
+
 ### Voice Service Auto-Restart
 
 When the daemon ends unexpectedly while listening is on, the tray shows a

@@ -58,6 +58,13 @@ $link.Arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$root\update-volt.
 $link.WorkingDirectory = $root
 $link.Save()
 
+# Desktop shortcut that opens Volt AI (starting with Windows stays quiet).
+$open = (New-Object -ComObject WScript.Shell).CreateShortcut((Join-Path $desktop 'Volt AI.lnk'))
+$open.TargetPath = 'wscript.exe'
+$open.Arguments = "`"$root\Start Volt AI.vbs`" --open-chat"
+$open.WorkingDirectory = $root
+$open.Save()
+
 Write-Host 'Starting Volt AI...' -ForegroundColor Cyan
 Start-Process wscript.exe -ArgumentList "`"$root\Start Volt AI.vbs`""
 Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue

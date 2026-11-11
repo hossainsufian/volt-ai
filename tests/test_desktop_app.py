@@ -1953,3 +1953,21 @@ class TestListeningWindowVisibility:
         assert show_idx > start_idx, (
             "the launch windows must open after the daemon auto-start"
         )
+
+
+class TestOpenChatAtLaunch:
+    """Starting with Windows/login stays quiet; clicking the app opens the chat."""
+
+    def test_open_chat_flag_opens_chat_even_when_startup_chat_is_off(self):
+        from types import SimpleNamespace
+        from desktop_app.app import should_open_chat_at_launch
+
+        quiet = SimpleNamespace(open_chat_on_start=False)
+        assert should_open_chat_at_launch(["--open-chat"], quiet)
+        assert not should_open_chat_at_launch([], quiet)
+
+    def test_startup_chat_setting_still_applies_without_the_flag(self):
+        from types import SimpleNamespace
+        from desktop_app.app import should_open_chat_at_launch
+
+        assert should_open_chat_at_launch([], SimpleNamespace(open_chat_on_start=True))

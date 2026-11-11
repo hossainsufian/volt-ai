@@ -80,6 +80,17 @@ DAEMON_AUTO_RESTART_LIMIT = 3
 DAEMON_AUTO_RESTART_WINDOW_SEC = 600
 DAEMON_AUTO_RESTART_DELAY_MS = 3000
 
+OPEN_CHAT_FLAG = "--open-chat"
+
+
+def should_open_chat_at_launch(argv, settings) -> bool:
+    """Open the chat window at launch?
+
+    Launchers the user clicks (app menu, desktop shortcut) pass ``--open-chat``;
+    starting with the computer doesn't, and then ``open_chat_on_start`` decides.
+    """
+    return OPEN_CHAT_FLAG in argv or bool(getattr(settings, "open_chat_on_start", True))
+
 
 @dataclass
 class OllamaRuntimeOwnership:
@@ -3942,11 +3953,11 @@ def main() -> int:
         # Volt AI opens only the chat at launch. Logs and the face stay
         # available from the tray menu.
 
-        # Volt AI: chat-first. Open the text chat window at launch unless the
-        # user turned it off with "open_chat_on_start": false in config.json.
+        # Volt AI: chat-first. Open the text chat window when the user clicked
+        # a launcher (--open-chat) or "open_chat_on_start" is on in config.json.
         try:
             from jarvis.config import load_settings as _load_chat_settings
-            if getattr(_load_chat_settings(), "open_chat_on_start", True):
+            if should_open_chat_at_launch(sys.argv[1:], _load_chat_settings()):
                 tray_instance.show_chat()
         except Exception as exc:
             debug_log(f"could not open chat at launch: {exc}", "desktop")
