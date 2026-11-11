@@ -106,7 +106,7 @@ class Stopped(Exception):
 
 
 def reply(turns: list[dict], model: str, api_key: str, client=None,
-          on_text=None, should_stop=None) -> str:
+          on_text=None, should_stop=None, extra_system: str = "") -> str:
     """Ask Claude for the next assistant turn. Raises on API errors.
 
     ``on_text(text_so_far)`` is called as words arrive; ``should_stop()`` is
@@ -121,7 +121,7 @@ def reply(turns: list[dict], model: str, api_key: str, client=None,
     with client.beta.messages.stream(
         model=model,
         max_tokens=64000,
-        system=SYSTEM_PROMPT,
+        system=SYSTEM_PROMPT + extra_system,
         messages=build_messages(turns),
         thinking={"type": "adaptive"},
         output_config={"effort": "high"},

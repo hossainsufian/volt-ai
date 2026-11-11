@@ -90,3 +90,18 @@ def test_model_error_is_raised(monkeypatch, tmp_path):
         volt_fast.reply([{"role": "user", "content": "hi"}],
                         post=fake_post([{"error": "model 'x' not found"}], {}))
     assert "isn't installed" in volt_fast.friendly_error(RuntimeError("model 'x' not found"))
+
+
+def test_readings_go_just_before_the_latest_question(monkeypatch, tmp_path):
+    # The main instructions and earlier chat stay identical between messages,
+    # so the model can reuse its work on them; only the new readings are fresh.
+    monkeypatch.setenv("JARVIS_CONFIG_PATH", str(tmp_path / "missing.json"))
+    turns = [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "hello"},
+             {"role": "user", "content": "how much ram?"}]
+    plain, with_readings = {}, {}
+    volt_fast.reply(turns, post=fake_post(CHUNKS, plain))
+    volt_fast.reply(turns, post=fake_post(CHUNKS, with_readings), extra_system="RAM: 3 of 8 GB used")
+    sent = with_readings["body"]["messages"]
+    assert sent[:3] == plain["body"]["messages"][:3]
+    assert "RAM: 3 of 8 GB used" in sent[-2]["content"]
+    assert sent[-1] == {"role": "user", "content": "how much ram?"}

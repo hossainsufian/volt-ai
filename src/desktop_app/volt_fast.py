@@ -28,8 +28,8 @@ SYSTEM_PROMPT = (
     "You are Volt AI, a warm, direct and genuinely helpful personal assistant. "
     "Answer clearly and get to the point; use short paragraphs or lists. "
     "When asked for code, give complete working code in fenced code blocks. "
-    "Be honest when you don't know something, and say that you can't browse the "
-    "web or see live data in this mode. Today is {today}."
+    "Be honest when you don't know something. You can't browse the web in this "
+    "mode. Today is {today}."
 )
 
 
@@ -58,8 +58,14 @@ def reply(
     on_text: Optional[Callable[[str], None]] = None,
     should_stop: Optional[Callable[[], bool]] = None,
     post: Optional[Callable] = None,
+    extra_system: str = "",
 ) -> str:
-    """Stream one answer from the local model. Raises on connection errors."""
+    """Stream one answer from the local model. Raises on connection errors.
+
+    ``extra_system`` (such as System analyzing readings) goes just before the
+    latest message, so the instructions and earlier chat stay identical between
+    messages and Ollama can reuse its work on them.
+    """
     model, url = model_and_url()
     if post is None:
         import requests
@@ -69,6 +75,8 @@ def reply(
     messages += build_messages(turns)[-MAX_TURNS:]
     if messages[1:] and messages[1]["role"] != "user":
         messages.pop(1)  # after trimming, the chat must still start with the user
+    if extra_system:
+        messages.insert(len(messages) - 1, {"role": "system", "content": extra_system.strip()})
     body = {
         "model": model,
         "messages": messages,

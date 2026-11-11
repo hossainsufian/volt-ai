@@ -87,6 +87,11 @@
         <p><small>Tip: in your phone's browser menu choose <i>Add to Home screen</i> to install Volt AI like an app.</small></p>
         <button type="button" class="link" id="forgetDevices">Disconnect all phones</button>
       </div>
+      <label class="toggle" id="sysRow">
+        <input type="checkbox" id="setSystem">
+        <span><strong>System analyzing</strong><br><small>Volt sees this computer's RAM, CPU, GPU, disks, temperature and battery, so you can ask things like "Why is my computer slow?". Works with ⚡ Fast and ✨ Claude.</small></span>
+      </label>
+      <div class="sys-box" id="sysBox" hidden></div>
       <div class="account" id="claudeBox">
         <h3>Claude brain (for coding)</h3>
         <p><small>Use Anthropic's Claude for much stronger coding and app building. Needs your own API key from <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>. Paid: each message uses your Claude credit, and your messages are sent to Anthropic.</small></p>

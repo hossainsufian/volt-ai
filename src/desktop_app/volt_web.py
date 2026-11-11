@@ -31,7 +31,7 @@ from typing import Callable, Optional, Protocol
 
 from jarvis.debug import debug_log
 
-from desktop_app import volt_claude, volt_fast
+from desktop_app import volt_claude, volt_fast, volt_system
 from desktop_app.volt_store import VoltStore
 
 STATIC_DIR = Path(__file__).parent / "volt_web_static"
@@ -47,6 +47,7 @@ DEFAULT_SETTINGS = {
     "phone_access": False,
     "claude_enabled": False,
     "claude_model": volt_claude.DEFAULT_MODEL,
+    "system_analysis": False,  # add live RAM/CPU/GPU/disk readings to each message
     "local_mode": "fast",  # "fast": one direct model call; "smart": full pipeline with tools
 }
 LOCAL_MODES = ("fast", "smart")
@@ -249,6 +250,12 @@ class VoltWebServer:
                 return not current or current["status"] != "pending"
 
             turns = self.store.conversation_for_restore(chat_id)
+            extra, question = "", (turns[-1].get("content", "") if turns else "")
+            if self.settings.get("system_analysis") and (
+                    brain == "claude" or volt_system.is_about_computer(question)):
+                extra = volt_system.prompt_block("" if brain == "claude" else question)
+                if brain == "claude":
+                    extra = "\n\n" + extra
             if brain == "claude":
                 answer = volt_claude.reply(
                     turns,
@@ -257,10 +264,11 @@ class VoltWebServer:
                     client=self._claude_client,
                     on_text=on_text,
                     should_stop=should_stop,
+                    extra_system=extra,
                 )
             else:
                 answer = volt_fast.reply(turns, on_text=on_text, should_stop=should_stop,
-                                         post=self._fast_post)
+                                         post=self._fast_post, extra_system=extra)
             status = "done"
         except volt_claude.Stopped:
             return  # the Stop handler already saved what was written
@@ -495,6 +503,13 @@ class VoltWebServer:
                     "models": volt_claude.MODELS,
                 },
             )
+
+        @app.get("/api/system")
+        def system_info():
+            require_auth()
+            if not server.settings.get("system_analysis"):
+                return jsonify(error="System analyzing is off."), 403
+            return jsonify(volt_system.snapshot())
 
         @app.post("/api/settings")
         def settings():

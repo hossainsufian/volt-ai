@@ -264,7 +264,8 @@ async function refreshState() {
   state.available = s.available; state.settings = s.settings; state.local = s.local;
   $("setImages").checked = !!s.settings.images_enabled;
   $("setPhone").checked = !!s.settings.phone_access;
-  $("setImages").disabled = $("setPhone").disabled = !s.local;
+  $("setSystem").checked = !!s.settings.system_analysis;
+  $("setImages").disabled = $("setPhone").disabled = $("setSystem").disabled = !s.local;
   $("laptopOnly").hidden = s.local;
   $("phoneRow").hidden = !s.local;
   $("phoneBox").hidden = !(s.local && s.settings.phone_access && s.phone_url);
@@ -381,11 +382,51 @@ $("closeSidebar").onclick = closeMenu;
 $("scrim").onclick = closeMenu;
 $("openSettings").onclick = async () => {
   await refreshState().catch(() => {}); refreshAccount().catch(() => {});
-  closeMenu(); $("settings").showModal();
+  closeMenu(); $("settings").showModal(); refreshSystem();
 };
 $("openGallery").onclick = openGallery;
 $("setImages").onchange = (e) => saveSetting("images_enabled", e.target.checked);
 $("setPhone").onchange = (e) => saveSetting("phone_access", e.target.checked);
+$("setSystem").onchange = async (e) => {
+  await saveSetting("system_analysis", e.target.checked);
+  if (e.target.checked) toast("System analyzing is on. Ask Volt about your computer.");
+  refreshSystem();
+};
+
+// --- System analyzing panel (live while Settings is open) -----------------------
+let sysTimer = null;
+function bar(label, percent, detail) {
+  const p = Math.max(0, Math.min(100, Number(percent) || 0));
+  const hot = p >= 85 ? " hot" : p >= 65 ? " warm" : "";
+  return `<div class="sys-row"><div class="sys-label"><span>${esc(label)}</span><span>${esc(detail)}</span></div>` +
+    `<div class="sys-bar${hot}"><i style="width:${p}%"></i></div></div>`;
+}
+const esc = (t) => escapeHtml(String(t ?? ""));
+async function refreshSystem() {
+  const box = $("sysBox");
+  clearTimeout(sysTimer);
+  if (!state.settings || !$("setSystem").checked || !$("settings").open) { box.hidden = true; return; }
+  try {
+    const s = await api("/api/system");
+    const c = s.cpu, r = s.ram;
+    let html = `<p class="sys-title">${esc(s.os)} · up ${s.uptime_hours} h</p>`;
+    html += bar(`CPU · ${c.name}`, c.percent, `${c.percent}% · ${c.cores} cores / ${c.threads} threads`);
+    html += bar("RAM", r.percent, `${r.used_gb} of ${r.total_gb} GB`);
+    for (const g of s.gpus) {
+      html += "busy_percent" in g
+        ? bar(`GPU · ${g.name}`, g.busy_percent, `${g.busy_percent}%` + (g.vram_total_gb ? ` · ${g.vram_used_gb} of ${g.vram_total_gb} GB` : ""))
+        : `<p class="sys-line">GPU · ${esc(g.name)}</p>`;
+    }
+    for (const d of s.disks) html += bar(`Disk ${d.mount}`, d.percent, `${d.free_gb} GB free of ${d.total_gb} GB`);
+    if (s.drives.length) html += `<p class="sys-line">Drives: ${esc(s.drives.join(" · "))}</p>`;
+    const t = Object.entries(s.temps_c || {});
+    if (t.length) html += `<p class="sys-line">🌡️ ${t.map(([k, v]) => `${esc(k)} ${v}°C`).join(" · ")}</p>`;
+    if (s.battery) html += `<p class="sys-line">🔋 ${s.battery.percent}% · ${s.battery.plugged_in ? "plugged in" : "on battery"}</p>`;
+    if (s.top_ram.length) html += `<p class="sys-line">Most RAM: ${s.top_ram.map((p) => `${esc(p.name)} ${p.ram_gb} GB`).join(" · ")}</p>`;
+    box.innerHTML = html; box.hidden = false;
+  } catch { box.hidden = true; }
+  sysTimer = setTimeout(refreshSystem, 3000);
+}
 $("forgetDevices").onclick = async () => {
   if (confirm("Disconnect every paired phone? They will need a new pairing code.")) {
     await api("/api/devices/forget", { method: "POST" }); refreshState();

@@ -211,3 +211,16 @@ menu { display: flex; justify-content: flex-end; padding: 0; margin: 18px 0 0; }
 #claudeModel { padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: transparent; color: inherit; font: inherit; }
 select.chip.brain { appearance: none; -webkit-appearance: none; cursor: pointer; padding-right: 26px; font: inherit; font-size: 14px;
   background: transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23999'/%3E%3C/svg%3E") no-repeat right 10px center; }
+
+/* System analyzing panel */
+.sys-box { margin: 4px 0 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; font-size: 13px; }
+.sys-title { margin: 0 0 8px; font-weight: 600; }
+.sys-row { margin: 8px 0; }
+.sys-label { display: flex; justify-content: space-between; gap: 8px; color: var(--ink-soft); margin-bottom: 4px; }
+.sys-label span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.sys-label span:last-child { flex: none; }
+.sys-bar { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.sys-bar i { display: block; height: 100%; background: var(--accent); transition: width .4s; }
+.sys-bar.warm i { background: #e0a030; }
+.sys-bar.hot i { background: #e05050; }
+.sys-line { margin: 6px 0; color: var(--ink-soft); }
