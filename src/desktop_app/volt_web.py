@@ -9,8 +9,9 @@ Access control
 --------------
 * The desktop window gets a secret session token in its start URL.
 * Phone access is off by default. When it is on, the server also listens on
-  the local network and a phone must enter the 6-digit pairing code shown
-  on the laptop before it receives its own device token (a cookie).
+  the network and a phone must enter the phone password set in Settings on
+  the computer before it receives its own device token (a cookie). The
+  password is permanent and stored only as a salted hash.
 * Every API call and image needs a valid token; failed pairing attempts are
   rate-limited.
 
@@ -41,6 +42,8 @@ DEFAULT_PORT = 8765
 PAIR_MAX_FAILURES = 5
 PAIR_LOCKOUT_SEC = 300
 PAIR_GLOBAL_MAX_FAILURES = 20
+PHONE_PASSWORD_MIN = 6
+PHONE_PASSWORD_ROUNDS = 200_000
 
 DEFAULT_SETTINGS = {
     "images_enabled": False,
@@ -107,7 +110,7 @@ class VoltWebServer:
         self.settings = self._load_json(self._settings_path, dict(DEFAULT_SETTINGS))
         self._devices: dict = self._load_json(self._devices_path, {})
         self.desktop_token = secrets.token_urlsafe(32)
-        self.pairing_code = f"{secrets.randbelow(10**6):06d}"
+        self._password_path = store.data_dir / "phone_password.json"
         self._pair_failures: dict[str, list[float]] = {}
         self._active_chat: Optional[str] = None
         self._server = None
@@ -151,6 +154,33 @@ class VoltWebServer:
                 # Rebind after this response has gone out.
                 threading.Timer(0.5, self.restart).start()
         return dict(self.settings)
+
+    # --- Phone password -------------------------------------------------------
+
+    @staticmethod
+    def _hash_password(password: str, salt: bytes) -> str:
+        import hashlib
+
+        return hashlib.pbkdf2_hmac("sha256", password.encode(), salt, PHONE_PASSWORD_ROUNDS).hex()
+
+    def has_phone_password(self) -> bool:
+        return bool(self._load_json(self._password_path, {}).get("hash"))
+
+    def set_phone_password(self, password: str) -> None:
+        if len(password) < PHONE_PASSWORD_MIN:
+            raise ValueError(f"Use at least {PHONE_PASSWORD_MIN} characters.")
+        salt = secrets.token_bytes(16)
+        with self._lock:
+            self._save_json(self._password_path,
+                            {"salt": salt.hex(), "hash": self._hash_password(password, salt)})
+        debug_log("volt phone password set", "volt")
+
+    def check_phone_password(self, password: str) -> bool:
+        stored = self._load_json(self._password_path, {})
+        if not stored.get("hash") or not password:
+            return False
+        attempt = self._hash_password(password, bytes.fromhex(stored["salt"]))
+        return secrets.compare_digest(attempt, stored["hash"])
 
     def _token_ok(self, token: Optional[str]) -> bool:
         if not token:
@@ -464,20 +494,20 @@ class VoltWebServer:
             overall = [t for times in server._pair_failures.values() for t in times
                        if now - t < PAIR_LOCKOUT_SEC]
             if len(recent) >= PAIR_MAX_FAILURES or len(overall) >= PAIR_GLOBAL_MAX_FAILURES:
-                return jsonify(error="Too many wrong codes. Wait 5 minutes."), 429
-            code = str((request.get_json(silent=True) or {}).get("code", "")).strip()
-            if not secrets.compare_digest(code, server.pairing_code):
+                return jsonify(error="Too many wrong passwords. Wait 5 minutes."), 429
+            if not server.has_phone_password():
+                return jsonify(error="Set a phone password in Volt AI's Settings on the computer first."), 409
+            password = str((request.get_json(silent=True) or {}).get("password", ""))
+            if not server.check_phone_password(password):
                 recent.append(now)
                 server._pair_failures[ip] = recent
-                return jsonify(error="That code is not right. Check the code on your laptop."), 403
+                return jsonify(error="That password is not right."), 403
             server._pair_failures.pop(ip, None)
             token = secrets.token_urlsafe(32)
             agent = request.headers.get("User-Agent", "")[:120]
             with server._lock:
                 server._devices[token] = {"paired": now, "agent": agent}
                 server._save_json(server._devices_path, server._devices)
-            # One code per phone: show a fresh one for the next device.
-            server.pairing_code = f"{secrets.randbelow(10**6):06d}"
             debug_log("volt phone paired", "volt")
             resp = jsonify(ok=True)
             resp.set_cookie(COOKIE, token, httponly=True, samesite="Strict",
@@ -493,7 +523,7 @@ class VoltWebServer:
                 local=is_local(),
                 phone_url=server.phone_url(),
                 tailscale_url=server.tailscale_url(),
-                pairing_code=server.pairing_code if is_local() else None,
+                phone_password_set=server.has_phone_password() if is_local() else None,
                 devices=len(server._devices),
                 brain=server.brain(),
                 claude={
@@ -510,6 +540,18 @@ class VoltWebServer:
             if not server.settings.get("system_analysis"):
                 return jsonify(error="System analyzing is off."), 403
             return jsonify(volt_system.snapshot())
+
+        @app.post("/api/phone-password")
+        def phone_password():
+            require_auth()
+            if not is_local():
+                abort(403)  # only the computer itself can set the password
+            password = str((request.get_json(silent=True) or {}).get("password", ""))
+            try:
+                server.set_phone_password(password)
+            except ValueError as exc:
+                return jsonify(error=str(exc)), 400
+            return jsonify(ok=True)
 
         @app.post("/api/settings")
         def settings():

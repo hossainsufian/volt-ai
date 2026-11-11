@@ -14,8 +14,8 @@
     <form class="pair-card" id="pairForm">
       <img src="/static/icon.svg" alt="" width="56" height="56">
       <h1>Connect to Volt AI</h1>
-      <p>Enter the 6-digit pairing code shown in Volt AI's Settings on your laptop.</p>
-      <input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" placeholder="000000" aria-label="Pairing code" required>
+      <p>Enter your Volt AI phone password. You only need to do this once on this phone.</p>
+      <input id="password" type="password" autocomplete="current-password" placeholder="Phone password" aria-label="Phone password" required>
       <p class="pair-error" id="err" role="alert"></p>
       <button class="primary" type="submit">Connect</button>
     </form>

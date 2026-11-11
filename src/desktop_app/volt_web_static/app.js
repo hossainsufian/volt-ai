@@ -272,7 +272,9 @@ async function refreshState() {
   $("phoneUrl").textContent = s.phone_url || "";
   $("tsLine").hidden = !s.tailscale_url;
   $("tsUrl").textContent = s.tailscale_url || "";
-  $("pairCode").textContent = s.pairing_code || "";
+  $("pwLine").textContent = s.phone_password_set
+    ? "✅ Phone password is set. Phones sign in with it once."
+    : "⚠️ Set a phone password so your phone can sign in.";
   els.imageMode.hidden = !s.settings.images_enabled;
   state.claude = s.claude || {};
   state.brain = s.brain || "fast";
@@ -427,8 +429,16 @@ async function refreshSystem() {
   } catch { box.hidden = true; }
   sysTimer = setTimeout(refreshSystem, 3000);
 }
+$("savePhonePassword").onclick = async () => {
+  const password = $("phonePassword").value;
+  if (password.length < 6) { toast("Use at least 6 characters."); return; }
+  try {
+    await api("/api/phone-password", { method: "POST", body: { password } });
+    $("phonePassword").value = ""; toast("Phone password saved."); refreshState();
+  } catch (e) { toast(e.message || "Could not save the password."); }
+};
 $("forgetDevices").onclick = async () => {
-  if (confirm("Disconnect every paired phone? They will need a new pairing code.")) {
+  if (confirm("Disconnect every phone? They will need to enter the phone password again.")) {
     await api("/api/devices/forget", { method: "POST" }); refreshState();
   }
 };

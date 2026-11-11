@@ -78,12 +78,16 @@
       </label>
       <label class="toggle" id="phoneRow">
         <input type="checkbox" id="setPhone">
-        <span><strong>Use Volt on my phone</strong><br><small>Phones on the same Wi-Fi can connect after entering a pairing code.</small></span>
+        <span><strong>Use Volt on my phone</strong><br><small>Phones can connect after entering the phone password you set below.</small></span>
       </label>
       <div class="phone-box" id="phoneBox" hidden>
         <p id="tsLine" hidden>Anywhere (Tailscale): <b id="tsUrl"></b></p>
         <p>At home on Wi-Fi: <b id="phoneUrl"></b></p>
-        <p>Pairing code: <b class="code" id="pairCode"></b></p>
+        <p id="pwLine"></p>
+        <div class="account-buttons">
+          <input type="password" id="phonePassword" class="key-input" placeholder="New phone password (6+ characters)" autocomplete="new-password">
+          <button type="button" class="primary" id="savePhonePassword">Save password</button>
+        </div>
         <p><small>Tip: in your phone's browser menu choose <i>Add to Home screen</i> to install Volt AI like an app.</small></p>
         <button type="button" class="link" id="forgetDevices">Disconnect all phones</button>
       </div>

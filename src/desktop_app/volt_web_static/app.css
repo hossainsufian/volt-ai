@@ -168,7 +168,7 @@ menu { display: flex; justify-content: flex-end; padding: 0; margin: 18px 0 0; }
 .pair-card h1 { font: 400 32px/1.2 var(--serif); margin: 14px 0 8px; }
 .pair-card p { color: var(--ink-soft); }
 .pair-card input {
-  width: 100%; font: 600 28px/1 var(--mono); letter-spacing: 8px; text-align: center;
+  width: 100%; font: 500 18px/1.2 var(--sans, inherit); text-align: center; color: var(--ink);
   padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); margin: 14px 0;
 }
 .pair-card .primary { width: 100%; padding: 12px; font-size: 16px; }
