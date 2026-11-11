@@ -23,22 +23,29 @@ $new = Join-Path $tmp 'volt-ai-main'
 if (-not (Test-Path "$new\src\desktop_app")) { throw 'The download looks incomplete. Try again.' }
 
 Write-Host 'Stopping Volt AI...' -ForegroundColor Cyan
-Get-CimInstance Win32_Process -Filter "Name='python.exe'" |
-    Where-Object { $_.ExecutablePath -and $_.ExecutablePath.StartsWith($root, [StringComparison]::OrdinalIgnoreCase) } |
-    ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
-Start-Sleep -Seconds 3
+# The venv's python.exe is a launcher: the real Volt processes run from uv's
+# own Python, so match them by what they run, not by where python.exe lives.
+function Get-VoltProcesses {
+    Get-CimInstance Win32_Process -Filter "Name='python.exe' OR Name='cmd.exe'" | Where-Object {
+        ($_.CommandLine -match '-m (desktop_app|jarvis\.main)') -or
+        ($_.ExecutablePath -and $_.ExecutablePath.StartsWith($root, [StringComparison]::OrdinalIgnoreCase)) -or
+        ($_.CommandLine -and $_.CommandLine.Contains("$root\run.cmd"))
+    }
+}
+Get-VoltProcesses | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+for ($i = 0; $i -lt 30 -and (Get-VoltProcesses); $i++) { Start-Sleep -Seconds 1 }
 
 Write-Host 'Installing the new version...' -ForegroundColor Cyan
-$old = Join-Path $root 'app\src.old'
-Remove-Item $old -Recurse -Force -ErrorAction SilentlyContinue
-if (Test-Path "$root\app\src") { Move-Item "$root\app\src" $old }
-Copy-Item "$new\src" "$root\app\src" -Recurse
+# Copy over the old files rather than renaming the folder: Windows often
+# keeps a folder busy (Explorer, antivirus) and refuses the rename.
+robocopy "$new\src" "$root\app\src" /MIR /NFL /NDL /NJH /NJS /NP /R:3 /W:2 /XD __pycache__ | Out-Null
+if ($LASTEXITCODE -ge 8) { throw "Some files could not be replaced (robocopy code $LASTEXITCODE). Close Volt AI and try again." }
 Copy-Item "$new\requirements.txt", "$new\LICENSE", "$new\README.md" "$root\app" -Force
 Copy-Item "$new\scripts\windows\run.cmd", "$new\scripts\windows\Start Volt AI.vbs", "$new\scripts\windows\update-volt.ps1" $root -Force
 
 # Add new Python packages if any were added (quick when nothing changed).
 $uv = Join-Path $env:USERPROFILE '.local\bin\uv.exe'
-if (Test-Path $uv) { & $uv pip install --quiet --python $python 'anthropic>=2.6.0' }
+if (Test-Path $uv) { & $uv pip install --quiet --python $python 'anthropic>=2.6.0' 'psutil>=5.9.0' }
 
 # Keep the chat window from popping up every time Windows starts.
 & $python -c "import json,os; p=os.path.expanduser('~/.config/jarvis/config.json'); c=json.load(open(p)) if os.path.exists(p) else {}; c['open_chat_on_start']=False; os.makedirs(os.path.dirname(p),exist_ok=True); json.dump(c,open(p,'w'),indent=2)"
@@ -54,7 +61,6 @@ $link.Save()
 Write-Host 'Starting Volt AI...' -ForegroundColor Cyan
 Start-Process wscript.exe -ArgumentList "`"$root\Start Volt AI.vbs`""
 Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
-Remove-Item $old -Recurse -Force -ErrorAction SilentlyContinue
 
 Write-Host ''
 Write-Host 'Volt AI is updated and running in the background.' -ForegroundColor Green
