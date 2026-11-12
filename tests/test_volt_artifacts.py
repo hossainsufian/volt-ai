@@ -85,3 +85,40 @@ def test_artifacts_use_the_direct_brain_even_in_smart_mode(setup):
     send(client, chat_id, "make a stopwatch", artifact=True)
     wait_done(srv)
     assert seen and not bridge.sent
+
+
+def test_artifacts_gallery_lists_every_page_volt_built(tmp_path, monkeypatch):
+    monkeypatch.setenv("JARVIS_CONFIG_PATH", str(tmp_path / "missing.json"))
+    store = VoltStore(tmp_path)
+    srv = VoltWebServer(store, Bridge(), port=0)
+    client = srv.app.test_client()
+    client.get(f"/?t={srv.desktop_token}", environ_base=LOCAL)
+    chat = store.create_chat("Games")
+    store.add_message(chat["id"], "user", "make a game")
+    store.add_message(chat["id"], "assistant",
+                      "Here.\n```html\n<html><title>Snake</title><body>s</body></html>\n```\n"
+                      "And a logo:\n```svg\n<svg></svg>\n```")
+    store.add_message(chat["id"], "assistant", "Just text, ```python\nprint(1)\n```")
+    items = client.get("/api/artifacts", environ_base=LOCAL).get_json()["artifacts"]
+    assert [(a["title"], a["lang"], a["chat_title"]) for a in items] == [
+        ("Snake", "html", "Games"), ("Picture", "svg", "Games")]
+    code = client.get(f"/api/artifacts/{items[0]['message_id']}/{items[0]['index']}",
+                      environ_base=LOCAL).get_json()
+    assert "<title>Snake</title>" in code["code"]
+
+
+def test_artifacts_need_sign_in(tmp_path):
+    srv = VoltWebServer(VoltStore(tmp_path), Bridge(), port=0)
+    assert srv.app.test_client().get("/api/artifacts", environ_base=LOCAL).status_code == 401
+
+
+def test_fast_brain_uses_the_model_chosen_in_settings(setup):
+    srv, client, chat_id, seen, _ = setup
+    srv.update_settings(fast_model="qwen2.5:1.5b")
+    send(client, chat_id, "hello")
+    wait_done(srv)
+    assert seen[-1]["model"] == "qwen2.5:1.5b"
+    srv.update_settings(fast_model="")
+    send(client, chat_id, "hello again")
+    wait_done(srv)
+    assert seen[-1]["model"] == volt_fast.model_and_url()[0]

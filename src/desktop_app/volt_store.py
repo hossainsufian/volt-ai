@@ -254,6 +254,17 @@ class VoltStore:
             ).fetchall()
         return [dict(r) for r in rows]
 
+    def assistant_messages_with_code(self) -> list[dict]:
+        """Finished assistant replies that contain a code block, newest first."""
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT m.id, m.chat_id, m.text, m.created, c.title AS chat_title"
+                " FROM messages m JOIN chats c ON c.id = m.chat_id"
+                " WHERE m.role = 'assistant' AND m.status = 'done' AND m.text LIKE '%```%'"
+                " ORDER BY m.id DESC"
+            ).fetchall()
+        return [dict(r) for r in rows]
+
     def save_image(self, data: bytes, suffix: str = ".jpg") -> str:
         name = f"{time.strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:8]}{suffix}"
         (self.images_dir / name).write_bytes(data)

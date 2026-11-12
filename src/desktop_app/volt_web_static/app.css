@@ -241,3 +241,12 @@ select.chip.brain { appearance: none; -webkit-appearance: none; cursor: pointer;
 @media (max-width: 760px) {
   .artifact { position: fixed; inset: 0; width: auto; z-index: 50; border-left: 0; }
 }
+
+/* Artifacts gallery */
+.artifact-list { display: grid; gap: 8px; max-height: 60vh; overflow-y: auto; }
+.artifact-card { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; }
+.artifact-icon { font-size: 22px; }
+.artifact-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.artifact-info strong, .artifact-info small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.artifact-info small { color: var(--ink-soft); }
+.artifact-card .primary { padding: 6px 14px; }

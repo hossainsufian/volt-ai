@@ -71,14 +71,19 @@ def reply(
     should_stop: Optional[Callable[[], bool]] = None,
     post: Optional[Callable] = None,
     extra_system: str = "",
+    model: Optional[str] = None,
 ) -> str:
     """Stream one answer from the local model. Raises on connection errors.
+
+    ``model`` overrides the assistant's configured chat model (Settings can pick
+    a smaller, quicker model just for Fast mode).
 
     ``extra_system`` (such as System analyzing readings) goes just before the
     latest message, so the instructions and earlier chat stay identical between
     messages and Ollama can reuse its work on them.
     """
-    model, url = model_and_url()
+    configured, url = model_and_url()
+    model = model or configured
     if post is None:
         import requests
 
@@ -126,9 +131,25 @@ def friendly_error(exc: Exception) -> str:
     return "The fast brain hit a problem. Try again, or switch to Smart mode."
 
 
-def warm_up(post: Optional[Callable] = None) -> None:
+def installed_models(get: Optional[Callable] = None) -> list[str]:
+    """Chat models Ollama has on this computer (embedding models left out)."""
+    _, url = model_and_url()
+    try:
+        if get is None:
+            import requests
+
+            get = requests.get
+        tags = get(f"{url}/api/tags", timeout=5).json().get("models") or []
+    except Exception:
+        return []
+    names = [m.get("name", "") for m in tags if "embed" not in m.get("name", "")]
+    return sorted(n for n in names if n)
+
+
+def warm_up(post: Optional[Callable] = None, model: Optional[str] = None) -> None:
     """Load the model into memory ahead of the first message (best effort)."""
-    model, url = model_and_url()
+    configured, url = model_and_url()
+    model = model or configured
     try:
         if post is None:
             import requests

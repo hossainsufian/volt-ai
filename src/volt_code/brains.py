@@ -225,3 +225,68 @@ class LocalBrain:
         for call, output, failed in results:
             self.messages.append({"role": "tool", "tool_name": call.name,
                                   "content": ("Error: " + output) if failed else output})
+
+
+# --- Online brain (Gemini or any OpenAI-compatible service) --------------------------
+
+class OnlineBrain:
+    label = "Online"
+
+    def __init__(self, api_key: str, model: str, base_url: str, system: str, post=None):
+        if post is None:
+            import requests
+
+            post = requests.post
+        self.post = post
+        self.key = api_key
+        self.model = model
+        self.url = base_url.rstrip("/")
+        self.messages: list[dict] = [{"role": "system", "content": system}]
+        self.tools = [{"type": "function", "function": t} for t in TOOLS]
+
+    def add_user(self, text: str) -> None:
+        self.messages.append({"role": "user", "content": text})
+
+    def step(self, on_text: OnText) -> list[ToolCall]:
+        body = {"model": self.model, "messages": list(self.messages), "tools": self.tools}
+        try:
+            resp = self.post(f"{self.url}/chat/completions", json=body,
+                             headers={"Authorization": f"Bearer {self.key}"}, timeout=(10, 300))
+            resp.raise_for_status()
+            message = (resp.json().get("choices") or [{}])[0].get("message") or {}
+        except Exception as exc:
+            status = getattr(getattr(exc, "response", None), "status_code", None)
+            if status in (400, 401, 403):
+                raise BrainError("The online brain did not accept the request or your key. Check it in Volt AI's Settings.")
+            if status == 429:
+                raise BrainError("You reached the free limit for now. Wait a minute, or use /brain local.")
+            name = type(exc).__name__
+            if "Connection" in name or "Timeout" in name:
+                raise BrainError("Can't reach the online brain. Check the internet connection.")
+            raise BrainError(f"The online brain failed ({name}).")
+        text = message.get("content") or ""
+        raw_calls = message.get("tool_calls") or []
+        if text:
+            on_text(text)
+        entry = {"role": "assistant", "content": text or None}
+        if raw_calls:
+            entry["tool_calls"] = raw_calls
+        self.messages.append(entry)
+        calls = []
+        for raw in raw_calls:
+            fn = raw.get("function") or {}
+            args = fn.get("arguments")
+            if isinstance(args, str):
+                try:
+                    args = json.loads(args) if args.strip() else {}
+                except ValueError:
+                    pass
+            call = ToolCall(raw.get("id") or uuid.uuid4().hex[:12], fn.get("name", ""), args)
+            call.error = check_input(call.name, args)
+            calls.append(call)
+        return calls
+
+    def add_results(self, results: list[tuple[ToolCall, str, bool]]) -> None:
+        for call, output, failed in results:
+            self.messages.append({"role": "tool", "tool_call_id": call.id,
+                                  "content": ("Error: " + output) if failed else output})

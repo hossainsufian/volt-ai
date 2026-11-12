@@ -156,3 +156,35 @@ def test_claude_brain_never_runs_tools_from_a_refused_reply():
     brain.add_user("hi")
     [call] = brain.step(lambda t: None)
     assert call.error
+
+
+class FakeJSON:
+    def __init__(self, data): self.data = data
+    def raise_for_status(self): pass
+    def json(self): return self.data
+
+
+def test_online_brain_runs_tool_calls_in_openai_format():
+    from volt_code.brains import OnlineBrain
+
+    replies = [
+        {"choices": [{"message": {"role": "assistant", "content": None, "tool_calls": [
+            {"id": "c1", "type": "function",
+             "function": {"name": "read_file", "arguments": "{\"path\": \"a.py\"}"}}]}}]},
+        {"choices": [{"message": {"role": "assistant", "content": "Done."}}]},
+    ]
+    sent = []
+
+    def post(url, json=None, headers=None, **kw):
+        sent.append(json)
+        return FakeJSON(replies.pop(0))
+
+    brain = OnlineBrain("key", "gemini-test", "https://x/v1", "sys", post=post)
+    brain.add_user("read a.py")
+    [call] = brain.step(lambda t: None)
+    assert (call.name, call.input, call.error) == ("read_file", {"path": "a.py"}, None)
+    brain.add_results([(call, "1\tprint(1)", False)])
+    text = []
+    assert brain.step(text.append) == [] and text == ["Done."]
+    tool_msg = sent[1]["messages"][-1]
+    assert tool_msg["role"] == "tool" and tool_msg["tool_call_id"] == "c1"

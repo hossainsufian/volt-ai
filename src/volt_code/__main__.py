@@ -18,7 +18,7 @@ import time
 from pathlib import Path
 
 from volt_code.agent import run_turn
-from volt_code.brains import BrainError, ClaudeBrain, LocalBrain
+from volt_code.brains import BrainError, ClaudeBrain, LocalBrain, OnlineBrain
 from volt_code.tools import Toolbox
 
 # --- Colours (off when not a terminal or NO_COLOR is set) ------------------------------
@@ -56,7 +56,9 @@ HELP = f"""
   {BOLD('Commands')}
     /help          show this help
     /clear         start a fresh conversation
-    /brain local   use the free local model     /brain claude   use Claude (needs your key)
+    /brain local   free model on this computer
+    /brain gemini  fast online brain (needs your Gemini key)
+    /brain claude  strongest for coding (needs your Claude key)
     /exit          quit (or press Ctrl+D)
   Press Ctrl+C to stop Volt while it's working.
 """
@@ -118,7 +120,7 @@ class TerminalUI:
 
 
 def make_brain(choice: str, root: Path, model: str | None):
-    from desktop_app import volt_claude, volt_fast
+    from desktop_app import volt_claude, volt_fast, volt_online
 
     system = SYSTEM_PROMPT.format(root=root, os=f"{platform.system()} {platform.release()}",
                                   today=time.strftime("%A %d %B %Y"))
@@ -128,6 +130,13 @@ def make_brain(choice: str, root: Path, model: str | None):
             raise BrainError("No Claude API key is saved. Add one in Volt AI's Settings, or use /brain local.")
         model = model if model in volt_claude.MODELS else volt_claude.DEFAULT_MODEL
         return ClaudeBrain(key, model, system), volt_claude.MODELS[model]
+    online = volt_online.load()
+    if choice in ("gemini", "online") or (choice == "auto" and online):
+        if not online:
+            raise BrainError("No Gemini API key is saved. Add one in Volt AI's Settings, or use /brain local.")
+        name = model or online.get("model") or volt_online.FALLBACK_MODEL
+        return (OnlineBrain(online["key"], name, online.get("base_url") or volt_online.BASE_URL, system),
+                f"{volt_online.PROVIDER} · {name} (fast, online)")
     local_model, url = volt_fast.model_and_url()
     return LocalBrain(model or local_model, url, system), f"{model or local_model} (free, on this computer)"
 
@@ -135,8 +144,8 @@ def make_brain(choice: str, root: Path, model: str | None):
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog="volt", description="⚡ Volt Code: a coding assistant in your terminal.")
     parser.add_argument("task", nargs="*", help="do this one task, then exit")
-    parser.add_argument("--brain", choices=("auto", "claude", "local"), default="auto",
-                        help="auto (default) uses Claude when a key is saved, otherwise the local model")
+    parser.add_argument("--brain", choices=("auto", "claude", "gemini", "local"), default="auto",
+                        help="auto (default) uses Claude or Gemini when a key is saved, otherwise the local model")
     parser.add_argument("--model", help="model to use (for example claude-sonnet-5-5 or qwen2.5:3b)")
     args = parser.parse_args(argv)
 

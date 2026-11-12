@@ -22,6 +22,7 @@
       <nav class="chat-list" id="chatList"></nav>
       <div class="sidebar-foot">
         <button class="foot-btn" id="openGallery"><span aria-hidden="true">🖼</span> Images</button>
+        <button class="foot-btn" id="openArtifacts"><span aria-hidden="true">🧩</span> Artifacts</button>
         <button class="foot-btn" id="openSettings"><span aria-hidden="true">⚙</span> Settings</button>
       </div>
     </aside>
@@ -58,6 +59,7 @@
             <select class="chip brain" id="brainSel" aria-label="Which brain answers" title="Which brain answers">
               <option value="fast">⚡ Fast</option>
               <option value="smart">🧠 Smart</option>
+              <option value="online">🌐 Gemini</option>
               <option value="claude">✨ Claude</option>
             </select>
             <span class="spacer"></span>
@@ -76,7 +78,7 @@
           <button type="button" id="artTabCode" role="tab" aria-selected="false">Code</button>
         </div>
         <button type="button" class="art-btn" id="artCopy">Copy</button>
-        <button type="button" class="art-btn" id="artDownload" title="Download as a file">⬇</button>
+        <button type="button" class="art-btn" id="artDownload" title="Download as an .html file">Save</button>
         <button type="button" class="art-btn" id="artClose" aria-label="Close">✕</button>
       </header>
       <iframe id="artFrame" title="Artifact preview" sandbox="allow-scripts allow-forms allow-modals allow-popups allow-downloads"></iframe>
@@ -111,6 +113,21 @@
         <span><strong>System analyzing</strong><br><small>Volt sees this computer's RAM, CPU, GPU, disks, temperature and battery, so you can ask things like "Why is my computer slow?". Works with ⚡ Fast and ✨ Claude.</small></span>
       </label>
       <div class="sys-box" id="sysBox" hidden></div>
+      <div class="toggle" id="fastModelRow">
+        <span aria-hidden="true">⚡</span>
+        <span><strong>Fast brain model</strong><br><small>Smaller models answer much faster but know less. On older computers, a 1.5b model is about twice as quick as a 3b one.</small><br>
+        <select id="fastModel" class="chip"></select></span>
+      </div>
+      <div class="account" id="onlineBox">
+        <h3>Gemini brain (fast, free allowance)</h3>
+        <p><small>Answers in a second or two from Google's servers, much faster than this computer's own brain. Get a free API key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>. Your messages are sent to Google, and on the free tier Google may use them to improve its products, so keep private things on the ⚡ Fast brain.</small></p>
+        <p id="onlineKeyLine"></p>
+        <div class="account-buttons">
+          <input type="password" id="onlineKey" class="key-input" placeholder="Paste Gemini API key" autocomplete="off" spellcheck="false">
+          <button type="button" class="primary" id="saveOnlineKey">Save key</button>
+          <button type="button" class="link" id="removeOnlineKey" hidden>Remove key</button>
+        </div>
+      </div>
       <div class="account" id="claudeBox">
         <h3>Claude brain (for coding)</h3>
         <p><small>Use Anthropic's Claude for much stronger coding and app building. Needs your own API key from <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>. Paid: each message uses your Claude credit, and your messages are sent to Anthropic.</small></p>
@@ -147,6 +164,15 @@
     <form method="dialog" class="sheet-body">
       <h2>Your images</h2>
       <div class="gallery-grid" id="galleryGrid"></div>
+      <menu><button class="primary" value="close">Close</button></menu>
+    </form>
+  </dialog>
+
+  <dialog id="artifactsSheet" class="sheet wide">
+    <form method="dialog" class="sheet-body">
+      <h2>Your artifacts</h2>
+      <p><small>Web pages, apps, games and pictures Volt has built for you.</small></p>
+      <div class="artifact-list" id="artifactList"></div>
       <menu><button class="primary" value="close">Close</button></menu>
     </form>
   </dialog>

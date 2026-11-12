@@ -30,6 +30,7 @@ The AI itself is reached through a *bridge* supplied by the desktop app
 from __future__ import annotations
 
 import json
+import re
 import secrets
 import socket
 import threading
@@ -40,7 +41,7 @@ from typing import Callable, Optional, Protocol
 
 from jarvis.debug import debug_log
 
-from desktop_app import volt_claude, volt_fast, volt_system
+from desktop_app import volt_claude, volt_fast, volt_online, volt_system
 from desktop_app.volt_store import VoltStore
 
 STATIC_DIR = Path(__file__).parent / "volt_web_static"
@@ -57,11 +58,22 @@ DEFAULT_SETTINGS = {
     "images_enabled": False,
     "phone_access": False,
     "claude_enabled": False,
+    "online_enabled": False,  # answer with the online brain (Gemini) when a key is saved
     "claude_model": volt_claude.DEFAULT_MODEL,
     "system_analysis": False,  # add live RAM/CPU/GPU/disk readings to each message
+    "fast_model": "",  # Ollama model for Fast mode; empty = the assistant's chat model
     "local_mode": "fast",  # "fast": one direct model call; "smart": full pipeline with tools
 }
 LOCAL_MODES = ("fast", "smart")
+
+
+ARTIFACT_BLOCK = re.compile(r"```(html|svg)[ \t]*\n(.*?)```", re.IGNORECASE | re.DOTALL)
+ARTIFACT_TITLE = re.compile(r"<title>([^<]{1,80})</title>", re.IGNORECASE)
+
+
+def find_artifacts(text: str) -> list[tuple[str, str]]:
+    """(lang, code) for each web page or SVG picture in a reply."""
+    return [(m.group(1).lower(), m.group(2)) for m in ARTIFACT_BLOCK.finditer(text or "")]
 
 
 class VoltBridge(Protocol):
@@ -112,6 +124,7 @@ class VoltWebServer:
         self._http_get = http_get
         self._claude_client = None  # tests inject a fake client
         self._fast_post = None  # tests inject a fake HTTP post for fast mode
+        self._online_post = None  # tests inject a fake HTTP post for the online brain
         self._lock = threading.RLock()
         self._settings_path = store.data_dir / "settings.json"
         self._devices_path = store.data_dir / "devices.json"
@@ -155,6 +168,10 @@ class VoltWebServer:
                 elif key == "local_mode":
                     if value in LOCAL_MODES:
                         self.settings[key] = value
+                elif key == "fast_model":
+                    self.settings[key] = str(value or "").strip()[:100]
+                    threading.Thread(target=volt_fast.warm_up, daemon=True,
+                                     kwargs={"model": self.settings[key] or None}).start()
                 elif key in DEFAULT_SETTINGS:
                     self.settings[key] = bool(value)
             self._save_json(self._settings_path, self.settings)
@@ -223,10 +240,15 @@ class VoltWebServer:
     def claude_active(self) -> bool:
         return bool(self.settings.get("claude_enabled")) and volt_claude.load_key() is not None
 
+    def online_active(self) -> bool:
+        return bool(self.settings.get("online_enabled")) and volt_online.load() is not None
+
     def brain(self) -> str:
-        """Which brain answers the next message: "claude", "fast" or "smart"."""
+        """Which brain answers the next message: "claude", "online", "fast" or "smart"."""
         if self.claude_active():
             return "claude"
+        if self.online_active():
+            return "online"
         mode = self.settings.get("local_mode", "fast")
         return mode if mode in LOCAL_MODES else "fast"
 
@@ -234,7 +256,7 @@ class VoltWebServer:
         brain = self.brain()
         if artifact and brain == "smart":
             brain = "fast"  # artifacts need the model's raw answer, not the assistant pipeline
-        if brain in ("claude", "fast"):
+        if brain in ("claude", "online", "fast"):
             return self._send_streamed(chat_id, text, brain, artifact)
         if not self.bridge.is_available():
             return {"error": "Volt AI is starting or stopped. Try again in a moment."}, 503
@@ -293,14 +315,14 @@ class VoltWebServer:
 
             turns = self.store.conversation_for_restore(chat_id)
             extra, question = "", (turns[-1].get("content", "") if turns else "")
-            if self.settings.get("system_analysis") and (
-                    brain == "claude" or volt_system.is_about_computer(question)):
-                extra = volt_system.prompt_block("" if brain == "claude" else question)
+            cloud = brain in ("claude", "online")  # big models: give them the full readings
+            if self.settings.get("system_analysis") and (cloud or volt_system.is_about_computer(question)):
+                extra = volt_system.prompt_block("" if cloud else question)
             if artifact:
                 extra = (extra + "\n\n" if extra else "") + volt_fast.ARTIFACT_PROMPT
                 if brain == "fast":
                     turns = turns[-volt_fast.ARTIFACT_TURNS:]
-            if brain == "claude" and extra and not extra.startswith("\n"):
+            if cloud and extra and not extra.startswith("\n"):
                 extra = "\n\n" + extra
             if brain == "claude":
                 answer = volt_claude.reply(
@@ -312,8 +334,12 @@ class VoltWebServer:
                     should_stop=should_stop,
                     extra_system=extra,
                 )
+            elif brain == "online":
+                answer = volt_online.reply(turns, on_text=on_text, should_stop=should_stop,
+                                           extra_system=extra, post=self._online_post)
             else:
                 answer = volt_fast.reply(turns, on_text=on_text, should_stop=should_stop,
+                                         model=self.settings.get("fast_model") or None,
                                          post=self._fast_post, extra_system=extra)
             status = "done"
         except volt_claude.Stopped:
@@ -322,6 +348,8 @@ class VoltWebServer:
             debug_log(f"volt {brain} request failed: {type(exc).__name__}", "volt")
             if brain == "fast":
                 answer = volt_fast.friendly_error(exc)
+            elif brain == "online":
+                answer = volt_online.friendly_error(exc)
             else:
                 answer = (volt_claude.friendly_error(exc) if key
                           else "Add your Claude API key in Settings first.")
@@ -542,6 +570,18 @@ class VoltWebServer:
                 phone_password_set=server.has_phone_password() if is_local() else None,
                 devices=len(server._devices),
                 brain=server.brain(),
+                fast_models={
+                    "installed": volt_fast.installed_models() if is_local() else [],
+                    "default": volt_fast.model_and_url()[0],
+                },
+                online={
+                    "active": server.online_active(),
+                    "has_key": volt_online.load() is not None,
+                    "key_hint": volt_online.masked_key() if is_local() else None,
+                    "model": volt_online.model_name(),
+                    "provider": volt_online.PROVIDER,
+                    "key_page": volt_online.KEY_PAGE,
+                },
                 claude={
                     "active": server.claude_active(),
                     "has_key": volt_claude.load_key() is not None,
@@ -584,9 +624,13 @@ class VoltWebServer:
             if want == "claude":
                 if volt_claude.load_key() is None:
                     return jsonify(error="Add your Claude API key in Settings on the laptop first."), 400
-                server.update_settings(claude_enabled=True)
+                server.update_settings(claude_enabled=True, online_enabled=False)
+            elif want == "online":
+                if volt_online.load() is None:
+                    return jsonify(error=f"Add your {volt_online.PROVIDER} API key in Settings on the computer first."), 400
+                server.update_settings(claude_enabled=False, online_enabled=True)
             elif want in LOCAL_MODES:
-                server.update_settings(claude_enabled=False, local_mode=want)
+                server.update_settings(claude_enabled=False, online_enabled=False, local_mode=want)
             else:
                 return jsonify(error="Unknown brain."), 400
             return jsonify(brain=server.brain(), active=server.claude_active())
@@ -604,8 +648,33 @@ class VoltWebServer:
             if not key.startswith("sk-ant-") or len(key) < 30 or any(c.isspace() for c in key):
                 return jsonify(error="That doesn't look like a Claude API key. It starts with sk-ant-."), 400
             volt_claude.save_key(key)
-            server.update_settings(claude_enabled=True)
+            server.update_settings(claude_enabled=True, online_enabled=False)
             return jsonify(ok=True, has_key=True, key_hint=volt_claude.masked_key())
+
+        @app.post("/api/online/key")
+        def online_key():
+            require_auth()
+            if not is_local():
+                abort(403)  # keys are only entered on the computer itself
+            key = str((request.get_json(silent=True) or {}).get("key", "")).strip()
+            if not key:
+                volt_online.clear()
+                server.update_settings(online_enabled=False)
+                return jsonify(ok=True, has_key=False)
+            if len(key) < 20 or any(c.isspace() for c in key):
+                return jsonify(error=f"That doesn't look like a {volt_online.PROVIDER} API key."), 400
+            try:
+                model = volt_online.check_key(key)
+            except Exception as exc:
+                status = getattr(getattr(exc, "response", None), "status_code", None)
+                if status in (400, 401, 403):
+                    return jsonify(error=f"{volt_online.PROVIDER} did not accept this key."), 400
+                debug_log(f"online key check failed: {type(exc).__name__}", "volt")
+                return jsonify(error=f"Couldn't reach {volt_online.PROVIDER} to check the key. Try again."), 502
+            volt_online.save(key, model)
+            server.update_settings(online_enabled=True, claude_enabled=False)
+            debug_log(f"online brain key saved, model {model}", "volt")
+            return jsonify(ok=True, has_key=True, key_hint=volt_online.masked_key(), model=model)
 
         @app.post("/api/devices/forget")
         def forget_devices():
@@ -720,6 +789,31 @@ class VoltWebServer:
                     server.store.update_message(pending["id"], text="Stopped.", status="error")
             return jsonify(ok=True)
 
+        @app.get("/api/artifacts")
+        def artifacts():
+            require_auth()
+            items = []
+            for msg in server.store.assistant_messages_with_code():
+                for index, (lang, code) in enumerate(find_artifacts(msg["text"])):
+                    title = ARTIFACT_TITLE.search(code)
+                    items.append({
+                        "message_id": msg["id"], "index": index, "lang": lang,
+                        "title": title.group(1).strip() if title else ("Picture" if lang == "svg" else "Web page"),
+                        "chat_id": msg["chat_id"], "chat_title": msg["chat_title"],
+                        "created": msg["created"], "size": len(code),
+                    })
+            return jsonify(artifacts=items)
+
+        @app.get("/api/artifacts/<int:message_id>/<int:index>")
+        def artifact(message_id, index):
+            require_auth()
+            msg = server.store.get_message(message_id)
+            found = find_artifacts(msg["text"]) if msg and msg["role"] == "assistant" else []
+            if index >= len(found):
+                abort(404)
+            lang, code = found[index]
+            return jsonify(lang=lang, code=code)
+
         @app.get("/api/images")
         def images():
             require_auth()
@@ -759,7 +853,8 @@ class VoltWebServer:
         host = "0.0.0.0" if self.settings.get("phone_access") else "127.0.0.1"
         if self.brain() == "fast":
             # Load the model now so the first message doesn't wait for it.
-            threading.Thread(target=volt_fast.warm_up, daemon=True).start()
+            threading.Thread(target=volt_fast.warm_up, daemon=True,
+                             kwargs={"model": self.settings.get("fast_model") or None}).start()
         for port in (self.port, *range(self.port + 1, self.port + 20)):
             try:
                 self._server = make_server(host, port, self.app, threaded=True)

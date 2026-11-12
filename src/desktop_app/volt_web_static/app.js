@@ -185,9 +185,14 @@ function updateComposer() {
   const claudeOpt = sel.querySelector('option[value="claude"]');
   claudeOpt.disabled = !hasKey;  // <option hidden> is ignored by some phone browsers
   claudeOpt.textContent = hasKey ? "✨ Claude" : "✨ Claude (needs key)";
+  const hasOnline = !!(state.online && state.online.has_key);
+  const onlineOpt = sel.querySelector('option[value="online"]');
+  onlineOpt.disabled = !hasOnline;
+  onlineOpt.textContent = hasOnline ? "🌐 Gemini" : "🌐 Gemini (needs key)";
   if (document.activeElement !== sel) sel.value = brain;
   sel.title = { fast: "Fast: quick answers from this computer. Private, no web search.",
     smart: "Smart: can search the web and remember things, but much slower.",
+    online: "Gemini: very fast answers from Google. Sent to Google.",
     claude: "Claude: strongest for coding. Paid, sent to Anthropic." }[brain];
   // Fast and Claude don't need the full assistant to be running.
   const ready = brain !== "smart" || state.available;
@@ -354,6 +359,9 @@ async function refreshState() {
     : "⚠️ Set a phone password so your phone can sign in.";
   els.imageMode.hidden = !s.settings.images_enabled;
   state.claude = s.claude || {};
+  state.online = s.online || {};
+  renderOnline(s);
+  renderFastModel(s);
   state.brain = s.brain || "fast";
   renderClaude(s);
   updateComposer();
@@ -372,6 +380,48 @@ function renderClaude(s) {
   $("claudeKeyLine").textContent = c.has_key ? `Key saved: ${c.key_hint}` : "";
   $("claudeKey").placeholder = c.has_key ? "Paste a new key to replace it" : "Paste key: sk-ant-…";
 }
+function renderFastModel(s) {
+  const f = s.fast_models || {}, sel = $("fastModel");
+  $("fastModelRow").hidden = !s.local || !(f.installed || []).length;
+  if (!s.local) return;
+  const want = s.settings.fast_model || "";
+  const options = [["", `Same as the assistant (${f.default})`],
+    ...(f.installed || []).filter((n) => n !== f.default).map((n) => [n, n])];
+  const key = JSON.stringify(options);
+  if (sel.dataset.key !== key) {
+    sel.innerHTML = ""; sel.dataset.key = key;
+    for (const [value, label] of options) sel.add(new Option(label, value));
+  }
+  if (document.activeElement !== sel) sel.value = want;
+}
+$("fastModel").onchange = async (e) => {
+  await saveSetting("fast_model", e.target.value);
+  toast(`Fast brain now uses ${e.target.value || "the assistant's model"}. Loading it…`);
+};
+function renderOnline(s) {
+  const o = s.online || {};
+  $("onlineBox").hidden = !s.local;
+  if (!s.local) return;
+  $("removeOnlineKey").hidden = !o.has_key;
+  $("onlineKeyLine").textContent = o.has_key ? `✅ Key saved: ${o.key_hint} · model ${o.model}` : "";
+  $("onlineKey").placeholder = o.has_key ? "Paste a new key to replace it" : "Paste Gemini API key";
+}
+$("saveOnlineKey").onclick = async () => {
+  const key = $("onlineKey").value.trim();
+  if (!key) { toast("Paste your Gemini API key first."); return; }
+  $("saveOnlineKey").disabled = true; $("saveOnlineKey").textContent = "Checking…";
+  try {
+    const r = await api("/api/online/key", { method: "POST", body: { key } });
+    $("onlineKey").value = ""; toast(`Gemini is on (${r.model}). New messages will use it.`);
+  } catch (err) { toast(err.message); }
+  $("saveOnlineKey").disabled = false; $("saveOnlineKey").textContent = "Save key";
+  refreshState().catch(() => {});
+};
+$("removeOnlineKey").onclick = async () => {
+  if (!confirm("Remove your Gemini API key from this computer? Volt goes back to the free brain.")) return;
+  await api("/api/online/key", { method: "POST", body: { key: "" } }).catch((e) => toast(e.message));
+  refreshState().catch(() => {});
+};
 $("saveClaudeKey").onclick = async () => {
   const key = $("claudeKey").value.trim();
   if (!key) { toast("Paste your Claude API key first."); return; }
@@ -433,6 +483,34 @@ async function openGallery() {
   closeMenu(); $("gallery").showModal();
 }
 
+async function openArtifactsSheet() {
+  const list = $("artifactList"); list.innerHTML = "";
+  const { artifacts } = await api("/api/artifacts");
+  if (!artifacts.length) {
+    list.innerHTML = '<p class="empty-note">Nothing yet. Turn on 🧩 Artifact next to the brain picker and ask Volt to build something, like "a stopwatch" or "a snake game".</p>';
+  }
+  for (const a of artifacts) {
+    const card = document.createElement("div"); card.className = "artifact-card";
+    const when = new Date(a.created * 1000).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+    card.innerHTML = `<div class="artifact-icon" aria-hidden="true">${a.lang === "svg" ? "🖼" : "🧩"}</div>
+      <div class="artifact-info"><strong></strong><small></small></div>
+      <button type="button" class="primary">Open</button><button type="button" class="link">Chat</button>`;
+    card.querySelector("strong").textContent = a.title;
+    card.querySelector("small").textContent = `${a.chat_title} · ${when}`;
+    const [open, chat] = card.querySelectorAll("button");
+    open.onclick = async () => {
+      try {
+        const r = await api(`/api/artifacts/${a.message_id}/${a.index}`);
+        $("artifactsSheet").close(); openArtifact(r.code, r.lang);
+      } catch (err) { toast(err.message); }
+    };
+    chat.onclick = () => { $("artifactsSheet").close(); location.hash = `chat=${a.chat_id}`; openChat(a.chat_id); };
+    list.appendChild(card);
+  }
+  closeMenu(); $("artifactsSheet").showModal();
+}
+$("openArtifacts").onclick = () => openArtifactsSheet().catch((e) => toast(e.message));
+
 // --- Wiring ----------------------------------------------------------------------
 function greet() {
   const h = new Date().getHours();
@@ -451,6 +529,7 @@ $("brainSel").onchange = async (e) => {
     state.brain = r.brain; state.claude.active = r.active; updateComposer();
     toast({ fast: "Fast mode: quick answers from this computer.",
       smart: "Smart mode: web search and memory, but slower.",
+      online: "Gemini: very fast answers (sent to Google).",
       claude: "Claude: best for coding (paid)." }[r.brain]);
   } catch (err) { toast(err.message); e.target.value = state.brain || "fast"; }
 };
