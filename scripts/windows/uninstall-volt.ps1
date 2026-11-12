@@ -25,6 +25,7 @@ $startup = [Environment]::GetFolderPath('Startup')
 Remove-Item (Join-Path $desktop 'Volt AI.lnk'), (Join-Path $desktop 'Update Volt AI.lnk'),
             (Join-Path $programs 'Volt AI.lnk'), (Join-Path $programs 'Update Volt AI.lnk'),
             (Join-Path $desktop 'Volt Code.lnk'), (Join-Path $programs 'Volt Code.lnk'),
+            (Join-Path $programs 'Volt AI On-Off.lnk'),
             (Join-Path $startup 'Start Volt AI.vbs') -Force -ErrorAction SilentlyContinue
 Remove-Item 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\VoltAI' -Recurse -Force -ErrorAction SilentlyContinue
 $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')

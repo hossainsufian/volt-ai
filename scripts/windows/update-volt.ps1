@@ -42,7 +42,8 @@ robocopy "$new\src" "$root\app\src" /MIR /NFL /NDL /NJH /NJS /NP /R:3 /W:2 /XD _
 if ($LASTEXITCODE -ge 8) { throw "Some files could not be replaced (robocopy code $LASTEXITCODE). Close Volt AI and try again." }
 Copy-Item "$new\requirements.txt", "$new\LICENSE", "$new\README.md" "$root\app" -Force
 $win = "$new\scripts\windows"
-Copy-Item "$win\run.cmd", "$win\Start Volt AI.vbs", "$win\update-volt.ps1", "$win\uninstall-volt.ps1", "$win\volt-ai.ico", "$win\volt.cmd" $root -Force
+Copy-Item "$win\run.cmd", "$win\Start Volt AI.vbs", "$win\update-volt.ps1", "$win\uninstall-volt.ps1", "$win\volt-ai.ico", "$win\volt.cmd",
+          "$win\toggle-volt.ps1", "$win\toggle-volt.vbs" $root -Force
 
 # Add new Python packages if any were added (quick when nothing changed).
 $uv = Join-Path $env:USERPROFILE '.local\bin\uv.exe'
@@ -74,6 +75,16 @@ New-VoltShortcut (Join-Path $programs 'Update Volt AI.lnk') 'powershell.exe' $up
 $codeArgs = '-NoExit -NoProfile -Command "Set-Location $env:USERPROFILE; & $env:LOCALAPPDATA\VoltAI\volt.cmd"'
 New-VoltShortcut (Join-Path $desktop 'Volt Code.lnk') 'powershell.exe' $codeArgs 'Volt Code: coding assistant in the terminal'
 New-VoltShortcut (Join-Path $programs 'Volt Code.lnk') 'powershell.exe' $codeArgs 'Volt Code: coding assistant in the terminal'
+
+# Ctrl+Alt+V turns all of Volt AI off, and on again (Start menu shortcut hotkey).
+$toggle = (New-Object -ComObject WScript.Shell).CreateShortcut((Join-Path $programs 'Volt AI On-Off.lnk'))
+$toggle.TargetPath = 'wscript.exe'
+$toggle.Arguments = "`"$root\toggle-volt.vbs`""
+$toggle.WorkingDirectory = $root
+$toggle.IconLocation = "$icon,0"
+$toggle.Description = 'Turn Volt AI off or on (Ctrl+Alt+V)'
+$toggle.Hotkey = 'CTRL+ALT+V'
+$toggle.Save()
 
 # The "volt" command (Volt Code) works in any new terminal window.
 $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
