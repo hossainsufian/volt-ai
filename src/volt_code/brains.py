@@ -144,6 +144,7 @@ class ClaudeBrain:
 class LocalBrain:
     label = "Local"
     CONTEXT_TOKENS = 8192  # room for file contents; still fast on a small CPU
+    MAX_REPLY_TOKENS = 4096  # small models can loop forever; a whole web page fits in this
 
     def __init__(self, model: str, url: str, system: str, post=None):
         if post is None:
@@ -176,7 +177,8 @@ class LocalBrain:
 
     def step(self, on_text: OnText) -> list[ToolCall]:
         body = {"model": self.model, "messages": self.messages, "tools": self.tools, "stream": True,
-                "keep_alive": "30m", "options": {"num_ctx": self.CONTEXT_TOKENS}}
+                "keep_alive": "30m", "options": {"num_ctx": self.CONTEXT_TOKENS, "num_predict": self.MAX_REPLY_TOKENS,
+                            "repeat_penalty": 1.1}}
         text, raw_calls = "", []
         try:
             with self.post(f"{self.url}/api/chat", json=body, stream=True, timeout=(10, 600)) as resp:

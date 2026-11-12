@@ -23,6 +23,7 @@ DEFAULT_URL = "http://127.0.0.1:11434"
 MAX_TURNS = 12          # recent turns sent with each message; keeps prompts short
 CONTEXT_TOKENS = 4096   # smaller context = faster prompt processing on CPU
 KEEP_LOADED = "30m"     # keep the model in memory between messages
+MAX_REPLY_TOKENS = 3072  # small models sometimes loop; stop a runaway answer
 
 SYSTEM_PROMPT = (
     "You are Volt AI, a warm, direct and genuinely helpful personal assistant. "
@@ -99,7 +100,7 @@ def reply(
         "messages": messages,
         "stream": True,
         "keep_alive": KEEP_LOADED,
-        "options": {"num_ctx": CONTEXT_TOKENS},
+        "options": {"num_ctx": CONTEXT_TOKENS, "num_predict": MAX_REPLY_TOKENS, "repeat_penalty": 1.1},
     }
     written = ""
     with post(f"{url}/api/chat", json=body, stream=True, timeout=(10, 300)) as resp:
