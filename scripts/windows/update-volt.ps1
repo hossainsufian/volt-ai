@@ -71,6 +71,9 @@ New-VoltShortcut (Join-Path $desktop 'Volt AI.lnk') 'wscript.exe' $openArgs 'Ope
 New-VoltShortcut (Join-Path $desktop 'Update Volt AI.lnk') 'powershell.exe' $updateArgs 'Update Volt AI'
 New-VoltShortcut (Join-Path $programs 'Volt AI.lnk') 'wscript.exe' $openArgs 'Open Volt AI'
 New-VoltShortcut (Join-Path $programs 'Update Volt AI.lnk') 'powershell.exe' $updateArgs 'Update Volt AI'
+$codeArgs = '-NoExit -NoProfile -Command "Set-Location $env:USERPROFILE; & $env:LOCALAPPDATA\VoltAI\volt.cmd"'
+New-VoltShortcut (Join-Path $desktop 'Volt Code.lnk') 'powershell.exe' $codeArgs 'Volt Code: coding assistant in the terminal'
+New-VoltShortcut (Join-Path $programs 'Volt Code.lnk') 'powershell.exe' $codeArgs 'Volt Code: coding assistant in the terminal'
 
 # The "volt" command (Volt Code) works in any new terminal window.
 $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
