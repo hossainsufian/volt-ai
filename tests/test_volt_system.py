@@ -49,3 +49,9 @@ def test_question_picks_only_the_readings_it_needs():
 def test_ordinary_chat_is_not_about_the_computer():
     assert volt_system.is_about_computer("How much RAM is free?")
     assert not volt_system.is_about_computer("Write a short poem about rain")
+
+
+def test_windows_thermal_zones_become_temperatures():
+    text = "\\_TZ.CPUZ|343.0\n\\_TZ.GFXZ|273.1\n\\_TZ.BATZ|301.0\n\\_TZ.LOCZ|322.0\n"
+    temps = volt_system.parse_windows_thermal_zones(text)
+    assert temps == {"cpu": 69.9, "battery": 27.9, "board": 48.9}  # unused zones (~0 °C) dropped

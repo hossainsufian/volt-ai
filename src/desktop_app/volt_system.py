@@ -149,7 +149,42 @@ def _disks() -> list[dict]:
     return disks
 
 
+# Windows ACPI thermal zone names -> plain words.
+ZONE_NAMES = {"CPU": "cpu", "GFX": "graphics", "BAT": "battery", "LOC": "board", "EXT": "case", "PCH": "chipset"}
+_windows_temps: tuple[float, dict] = (0.0, {})
+
+
+def parse_windows_thermal_zones(text: str) -> dict[str, float]:
+    """'\\_TZ.CPUZ|343.0' lines (Kelvin) -> {'cpu': 69.9}; unused zones read ~0 °C."""
+    temps = {}
+    for line in text.splitlines():
+        name, _, kelvin = line.strip().partition("|")
+        try:
+            celsius = round(float(kelvin) - 273.15, 1)
+        except ValueError:
+            continue
+        if celsius < 5:
+            continue
+        code = name.rsplit(".", 1)[-1].upper().rstrip("Z")[:3]
+        temps[ZONE_NAMES.get(code, code.lower())] = celsius
+    return temps
+
+
+def _windows_temperatures() -> dict[str, float]:
+    # PowerShell is slow to start, so read at most every 15 seconds.
+    global _windows_temps
+    taken, temps = _windows_temps
+    if time.time() - taken > 15:
+        out = _powershell("Get-CimInstance Win32_PerfFormattedData_Counters_ThermalZoneInformation | "
+                          "ForEach-Object { $_.Name + '|' + $_.Temperature }")
+        temps = parse_windows_thermal_zones(out)
+        _windows_temps = (time.time(), temps)
+    return temps
+
+
 def _temperatures() -> dict[str, float]:
+    if platform.system() == "Windows":
+        return _windows_temperatures()
     try:
         sensors = psutil.sensors_temperatures()
     except (AttributeError, OSError):
