@@ -42,7 +42,7 @@ robocopy "$new\src" "$root\app\src" /MIR /NFL /NDL /NJH /NJS /NP /R:3 /W:2 /XD _
 if ($LASTEXITCODE -ge 8) { throw "Some files could not be replaced (robocopy code $LASTEXITCODE). Close Volt AI and try again." }
 Copy-Item "$new\requirements.txt", "$new\LICENSE", "$new\README.md" "$root\app" -Force
 $win = "$new\scripts\windows"
-Copy-Item "$win\run.cmd", "$win\Start Volt AI.vbs", "$win\update-volt.ps1", "$win\uninstall-volt.ps1", "$win\volt-ai.ico" $root -Force
+Copy-Item "$win\run.cmd", "$win\Start Volt AI.vbs", "$win\update-volt.ps1", "$win\uninstall-volt.ps1", "$win\volt-ai.ico", "$win\volt.cmd" $root -Force
 
 # Add new Python packages if any were added (quick when nothing changed).
 $uv = Join-Path $env:USERPROFILE '.local\bin\uv.exe'
@@ -71,6 +71,12 @@ New-VoltShortcut (Join-Path $desktop 'Volt AI.lnk') 'wscript.exe' $openArgs 'Ope
 New-VoltShortcut (Join-Path $desktop 'Update Volt AI.lnk') 'powershell.exe' $updateArgs 'Update Volt AI'
 New-VoltShortcut (Join-Path $programs 'Volt AI.lnk') 'wscript.exe' $openArgs 'Open Volt AI'
 New-VoltShortcut (Join-Path $programs 'Update Volt AI.lnk') 'powershell.exe' $updateArgs 'Update Volt AI'
+
+# The "volt" command (Volt Code) works in any new terminal window.
+$userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+if (($userPath -split ';') -notcontains $root) {
+    [Environment]::SetEnvironmentVariable('Path', ($userPath.TrimEnd(';') + ';' + $root).TrimStart(';'), 'User')
+}
 
 $key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\VoltAI'
 New-Item $key -Force | Out-Null

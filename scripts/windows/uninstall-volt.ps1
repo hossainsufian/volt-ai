@@ -26,6 +26,8 @@ Remove-Item (Join-Path $desktop 'Volt AI.lnk'), (Join-Path $desktop 'Update Volt
             (Join-Path $programs 'Volt AI.lnk'), (Join-Path $programs 'Update Volt AI.lnk'),
             (Join-Path $startup 'Start Volt AI.vbs') -Force -ErrorAction SilentlyContinue
 Remove-Item 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\VoltAI' -Recurse -Force -ErrorAction SilentlyContinue
+$userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+[Environment]::SetEnvironmentVariable('Path', (($userPath -split ';') | Where-Object { $_ -and $_ -ne $root }) -join ';', 'User')
 Remove-Item $root -Recurse -Force -ErrorAction SilentlyContinue
 
 [System.Windows.MessageBox]::Show('Volt AI has been removed. Your chats and settings are still saved.',

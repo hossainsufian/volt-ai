@@ -92,6 +92,7 @@ For an experimental 27B alternative, see the [Bonsai 2 local setup guide](docs/B
 - **Dictate into other apps.** Hold a hotkey, speak, then release to paste locally transcribed text. See the [platform limitations](#known-limitations) first.
 - **Type when you need to.** The companion chat shares your voice conversation and memory. Text replies are silent, and you can rewind a sent message to regenerate from that point.
 - **Queue work locally.** Submit prompts from the Task Centre, follow their results and cancel requests.
+- **Code in the terminal with Volt Code.** Run `volt` in a project folder and ask it to explain, fix or build things. It reads and searches your files, edits them and runs commands, asking before every change. It uses the free local model, or Claude when you have saved your own API key.
 
 ### Bring Jarvis into the discussion
 
