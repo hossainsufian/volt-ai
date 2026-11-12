@@ -41,7 +41,8 @@ Write-Host 'Installing the new version...' -ForegroundColor Cyan
 robocopy "$new\src" "$root\app\src" /MIR /NFL /NDL /NJH /NJS /NP /R:3 /W:2 /XD __pycache__ | Out-Null
 if ($LASTEXITCODE -ge 8) { throw "Some files could not be replaced (robocopy code $LASTEXITCODE). Close Volt AI and try again." }
 Copy-Item "$new\requirements.txt", "$new\LICENSE", "$new\README.md" "$root\app" -Force
-Copy-Item "$new\scripts\windows\run.cmd", "$new\scripts\windows\Start Volt AI.vbs", "$new\scripts\windows\update-volt.ps1" $root -Force
+$win = "$new\scripts\windows"
+Copy-Item "$win\run.cmd", "$win\Start Volt AI.vbs", "$win\update-volt.ps1", "$win\uninstall-volt.ps1", "$win\volt-ai.ico" $root -Force
 
 # Add new Python packages if any were added (quick when nothing changed).
 $uv = Join-Path $env:USERPROFILE '.local\bin\uv.exe'
@@ -50,20 +51,41 @@ if (Test-Path $uv) { & $uv pip install --quiet --python $python 'anthropic>=2.6.
 # Keep the chat window from popping up every time Windows starts.
 & $python -c "import json,os; p=os.path.expanduser('~/.config/jarvis/config.json'); c=json.load(open(p)) if os.path.exists(p) else {}; c['open_chat_on_start']=False; os.makedirs(os.path.dirname(p),exist_ok=True); json.dump(c,open(p,'w'),indent=2)"
 
-# Desktop shortcut for future updates.
+# Make Volt AI a proper app: Start menu and desktop entries with its icon,
+# and an entry in Settings > Apps (with Uninstall). No admin rights needed.
+$icon = "$root\volt-ai.ico"
+function New-VoltShortcut($path, $target, $arguments, $description) {
+    $link = (New-Object -ComObject WScript.Shell).CreateShortcut($path)
+    $link.TargetPath = $target
+    $link.Arguments = $arguments
+    $link.WorkingDirectory = $root
+    $link.IconLocation = "$icon,0"
+    $link.Description = $description
+    $link.Save()
+}
+$openArgs = "`"$root\Start Volt AI.vbs`" --open-chat"
+$updateArgs = "-NoProfile -ExecutionPolicy Bypass -File `"$root\update-volt.ps1`""
 $desktop = [Environment]::GetFolderPath('Desktop')
-$link = (New-Object -ComObject WScript.Shell).CreateShortcut((Join-Path $desktop 'Update Volt AI.lnk'))
-$link.TargetPath = 'powershell.exe'
-$link.Arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$root\update-volt.ps1`""
-$link.WorkingDirectory = $root
-$link.Save()
+$programs = [Environment]::GetFolderPath('Programs')
+New-VoltShortcut (Join-Path $desktop 'Volt AI.lnk') 'wscript.exe' $openArgs 'Open Volt AI'
+New-VoltShortcut (Join-Path $desktop 'Update Volt AI.lnk') 'powershell.exe' $updateArgs 'Update Volt AI'
+New-VoltShortcut (Join-Path $programs 'Volt AI.lnk') 'wscript.exe' $openArgs 'Open Volt AI'
+New-VoltShortcut (Join-Path $programs 'Update Volt AI.lnk') 'powershell.exe' $updateArgs 'Update Volt AI'
 
-# Desktop shortcut that opens Volt AI (starting with Windows stays quiet).
-$open = (New-Object -ComObject WScript.Shell).CreateShortcut((Join-Path $desktop 'Volt AI.lnk'))
-$open.TargetPath = 'wscript.exe'
-$open.Arguments = "`"$root\Start Volt AI.vbs`" --open-chat"
-$open.WorkingDirectory = $root
-$open.Save()
+$key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\VoltAI'
+New-Item $key -Force | Out-Null
+$entry = @{
+    DisplayName = 'Volt AI'
+    DisplayIcon = $icon
+    DisplayVersion = (Get-Date -Format 'yyyy.M.d')
+    Publisher = 'Sufian Hossain (based on Jarvis by isair)'
+    InstallLocation = $root
+    UninstallString = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$root\uninstall-volt.ps1`""
+    URLInfoAbout = 'https://github.com/hossainsufian/volt-ai'
+}
+foreach ($name in $entry.Keys) { Set-ItemProperty $key $name $entry[$name] }
+Set-ItemProperty $key NoModify 1 -Type DWord
+Set-ItemProperty $key NoRepair 1 -Type DWord
 
 Write-Host 'Starting Volt AI...' -ForegroundColor Cyan
 Start-Process wscript.exe -ArgumentList "`"$root\Start Volt AI.vbs`""

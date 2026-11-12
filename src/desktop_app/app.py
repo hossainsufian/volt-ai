@@ -3499,6 +3499,14 @@ def main() -> int:
     # Only wrap the real console streams (sys.__stdout__/sys.__stderr__):
     # test harnesses replace sys.stdout with capture objects whose buffers
     # must not be detached.
+    if sys.platform == 'win32':
+        # Group Volt's windows under its own taskbar entry and icon instead of
+        # python.exe's.
+        try:
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("VoltAI.Desktop")
+        except Exception:
+            pass
     if sys.platform == 'win32' and not getattr(sys, 'frozen', False):
         try:
             import io
