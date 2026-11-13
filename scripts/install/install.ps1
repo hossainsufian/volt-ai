@@ -4,8 +4,9 @@
 #
 # Installs Volt AI into %LOCALAPPDATA%\VoltAI with its own Python, the free
 # local AI brain (Ollama + models), Start menu and desktop entries, the
-# Ctrl+Alt+V on/off hotkey, the `volt` command (Volt Code), starts it with
-# Windows (quietly), and lists it in Settings > Apps with an Uninstall button.
+# Ctrl+Alt+V on/off hotkey and the `volt` command (Volt Code), and lists it in
+# Settings > Apps with an Uninstall button. It runs only when you open it
+# ($env:VOLT_AUTOSTART=1 also starts it quietly with Windows).
 # Run it again any time to update. Based on Jarvis by isair (non-commercial licence).
 
 $ErrorActionPreference = 'Stop'
@@ -81,15 +82,17 @@ foreach ($m in $chatModel, $embedModel) {
     if ((Run @($ollama, 'pull', $m)) -ne 0) { throw "Downloading the AI model $m failed. Check the internet connection and run this again." }
 }
 
-# --- Settings: start quietly with Windows; clicking the app opens the chat ---------------
+# --- Settings ----------------------------------------------------------------------------
 Run @($python, '-c', "import json,os; p=os.path.expanduser('~/.config/jarvis/config.json'); os.makedirs(os.path.dirname(p),exist_ok=True); c=json.load(open(p)) if os.path.exists(p) else {}; c.setdefault('ollama_chat_model','$chatModel'); json.dump(c,open(p,'w'),indent=2)") | Out-Null
 
 # --- Files, Start menu, desktop, hotkey, volt command, Settings > Apps, start ------------
 # The updater does all of this and starts Volt AI ($env:VOLT_NO_START=1 skips the start).
 $updater = Get-Content "$new\scripts\windows\update-volt.ps1" -Raw
-if ($env:VOLT_NO_START) { $updater = $updater -replace '(?m)^Start-Process wscript.*$', '' }
+# A fresh install opens the chat so you see Volt AI straight away.
+$openNow = if ($env:VOLT_NO_START) { '' } else { 'Start-Process wscript.exe -ArgumentList "`"$root\Start Volt AI.vbs`" --open-chat"' }
+$updater = $updater -replace '(?m)^Start-Process wscript.*$', $openNow
 Invoke-Expression $updater
-Copy-Item "$root\Start Volt AI.vbs" ([Environment]::GetFolderPath('Startup')) -Force
+if ($env:VOLT_AUTOSTART) { Copy-Item "$root\Start Volt AI.vbs" ([Environment]::GetFolderPath('Startup')) -Force }
 Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
 
 Say 'Installed. Open it from the Start menu: Volt AI.'

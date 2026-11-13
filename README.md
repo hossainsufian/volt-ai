@@ -19,7 +19,7 @@ irm https://raw.githubusercontent.com/hossainsufian/volt-ai/main/scripts/install
 curl -fsSL https://raw.githubusercontent.com/hossainsufian/volt-ai/main/scripts/install/install.sh | bash
 ```
 
-Then open **Volt AI** from the Start menu (Windows), the app menu (Linux) or **Applications** in your home folder (macOS). It also starts quietly when you log in.
+Then open **Volt AI** from the Start menu (Windows), the app menu (Linux) or **Applications** in your home folder (macOS). It only runs when you open it.
 
 **Volt Code**, the coding assistant for the terminal, comes with it on Windows and Linux: open a new terminal and type `volt`.
 

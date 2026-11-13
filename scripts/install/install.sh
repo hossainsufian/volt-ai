@@ -12,7 +12,7 @@
 # Options (environment variables):
 #   VOLT_HOME=/path       install somewhere else
 #   VOLT_NO_MODELS=1      don't install Ollama or download AI models
-#   VOLT_NO_AUTOSTART=1   don't start Volt AI when you log in
+#   VOLT_AUTOSTART=1      also start Volt AI (quietly) when you log in
 #   VOLT_NO_START=1       don't start Volt AI at the end
 #   VOLT_NO_SHORTCUTS=1   don't add menu entries, launchers or the volt command
 #   VOLT_SOURCE=/path     install from a local copy of the code instead of GitHub
@@ -100,7 +100,7 @@ exec "$PY" -m desktop_app "\$@" >> "\$HOME/.local/state/volt-ai/volt-ai.log" 2>&
 EOF
 chmod +x "$VOLT_HOME/run.sh"
 
-# --- Settings: start quietly at login; clicking the app opens the chat ---------------
+# --- Settings: opening the app shows the chat; a login start (VOLT_AUTOSTART) stays quiet
 "$PY" - "$CHAT_MODEL" <<'EOF'
 import json, os, sys
 path = os.path.expanduser("~/.config/jarvis/config.json")
@@ -172,7 +172,7 @@ Icon=$VOLT_HOME/volt-ai.svg
 Terminal=true
 Categories=Development;Utility;
 EOF
-    if [ -z "${VOLT_NO_AUTOSTART:-}" ]; then
+    if [ -n "${VOLT_AUTOSTART:-}" ]; then
       mkdir -p "$HOME/.config/autostart"
       sed -e "s|--open-chat||" -e "s|^Name=Volt AI|Name=Volt AI (start quietly)|" \
         "$APPS/volt-ai.desktop" > "$HOME/.config/autostart/volt-ai.desktop"
@@ -198,7 +198,7 @@ EOF
   <key>LSUIElement</key><true/>
 </dict></plist>
 EOF
-    if [ -z "${VOLT_NO_AUTOSTART:-}" ]; then
+    if [ -n "${VOLT_AUTOSTART:-}" ]; then
       mkdir -p "$HOME/Library/LaunchAgents"
       cat > "$HOME/Library/LaunchAgents/io.github.hossainsufian.voltai.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
