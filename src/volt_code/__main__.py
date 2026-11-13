@@ -63,6 +63,7 @@ HELP = f"""
     /brain gemini  fast online brain (needs your Gemini key)
     /brain claude  strongest for coding (needs your Claude key)
     /resume        continue an earlier chat from this folder
+    /computer      let Volt see the screen and use mouse and keyboard (needs Claude)
     /exit          quit (or press Ctrl+D)
   Press Ctrl+C to stop Volt while it's working.
 """
@@ -85,11 +86,22 @@ class TerminalUI:
             self.writing = False
 
     def tool_start(self, call) -> None:
-        detail = call.input.get("path") or call.input.get("pattern") or call.input.get("command") or ""
+        args = call.input if isinstance(call.input, dict) else {}
+        if call.toolset:
+            detail = args.get("text") or args.get("coordinate") or args.get("region") or ""
+            print(DIM(f"  🖱️  {call.name} ") + str(detail)[:120])
+            return
+        detail = args.get("path") or args.get("pattern") or args.get("command") or ""
         print(DIM(f"  🔧 {call.name} ") + str(detail)[:120])
 
-    def tool_done(self, call, output: str, failed: bool) -> None:
-        lines = output.strip().splitlines() or [""]
+    def tool_done(self, call, output, failed: bool) -> None:
+        if isinstance(output, list):  # computer action: image and/or text blocks
+            if any(b.get("type") == "image" for b in output):
+                print(DIM("     ↳ 📸 screenshot"))
+            else:
+                print(DIM("     ↳ " + " ".join(b.get("text", "") for b in output)[:140]))
+            return
+        lines = str(output).strip().splitlines() or [""]
         first = lines[0][:140]
         more = f" (+{len(lines) - 1} lines)" if len(lines) > 1 else ""
         print(("     " + RED("✗ " + first)) if failed else DIM(f"     ↳ {first}{more}"))
@@ -98,7 +110,8 @@ class TerminalUI:
         print(ACCENT("  ⚠️  " + message))
 
     def approve(self, title: str, detail: str) -> bool:
-        kind = "commands" if title.startswith("Run") else "file changes"
+        kind = ("commands" if title.startswith("Run") else
+                "screen control" if title.startswith("Control the screen") else "file changes")
         if kind in self.always:
             return True
         self.end_text()
@@ -123,7 +136,7 @@ class TerminalUI:
                 return False
 
 
-def make_brain(choice: str, root: Path, model: str | None):
+def make_brain(choice: str, root: Path, model: str | None, computer: bool = False):
     from desktop_app import volt_claude, volt_fast, volt_online
 
     system = SYSTEM_PROMPT.format(root=root, os=f"{platform.system()} {platform.release()}",
@@ -133,7 +146,10 @@ def make_brain(choice: str, root: Path, model: str | None):
         if not key:
             raise BrainError("No Claude API key is saved. Add one in Volt AI's Settings, or use /brain local.")
         model = model if model in volt_claude.MODELS else volt_claude.DEFAULT_MODEL
-        return ClaudeBrain(key, model, system), volt_claude.MODELS[model]
+        return (ClaudeBrain(key, model, system, computer=computer),
+                volt_claude.MODELS[model] + (" · 🖥️ screen control" if computer else ""))
+    if computer:
+        raise BrainError("Screen control needs Claude (it has to see the screen). Add a Claude API key in Volt AI's Settings.")
     online = volt_online.load()
     if choice in ("gemini", "online") or (choice == "auto" and online):
         if not online:
@@ -185,16 +201,33 @@ def main(argv=None) -> int:
     parser.add_argument("-c", "--continue", dest="cont", action="store_true",
                         help="continue the last chat in this folder")
     parser.add_argument("-r", "--resume", action="store_true", help="pick an earlier chat in this folder to continue")
+    parser.add_argument("--computer", action="store_true",
+                        help="let Volt see the screen and use the mouse and keyboard (needs Claude)")
     args = parser.parse_args(argv)
 
     root = Path.cwd().resolve()
     ui = TerminalUI()
     toolbox = Toolbox(root, approve=ui.approve)
-    state = {}
+    state = {"computer": None}
+
+    def computer_on() -> bool:
+        from volt_code.computer import Computer, unsupported_reason
+
+        reason = unsupported_reason()
+        if reason:
+            print(RED(f"  ❌ {reason}"))
+            return False
+        try:
+            state["computer"] = Computer()
+        except Exception as exc:  # no screen access in this session
+            print(RED(f"  ❌ Can't reach the screen here ({type(exc).__name__})."))
+            return False
+        return True
 
     def start(choice: str, model) -> bool:
         try:
-            state["brain"], state["name"] = make_brain(choice, root, model)
+            state["brain"], state["name"] = make_brain(choice, root, model,
+                                                       computer=state["computer"] is not None)
         except BrainError as exc:
             print(RED(f"❌ {exc}"))
             return False
@@ -215,12 +248,15 @@ def main(argv=None) -> int:
         print()
         return True
 
+    if args.computer and not computer_on():
+        return 1
     if not start(args.brain, args.model):
         return 1
 
     def ask(text: str) -> None:
         try:
-            run_turn(state["brain"], toolbox, text, ui)
+            run_turn(state["brain"], toolbox, text, ui, computer=state["computer"],
+                     max_steps=120 if state["computer"] else 40)
         except KeyboardInterrupt:
             ui.end_text()
             print(ACCENT("\n  ⏹  Stopped."))
@@ -277,6 +313,18 @@ def main(argv=None) -> int:
             return 0
         if text == "/help":
             print(HELP)
+            continue
+        if text == "/computer":
+            if state["computer"] is None:
+                if computer_on() and start("claude", args.model):
+                    print(ACCENT("  🖥️  Screen control is ON. Volt can see the screen and use the mouse and keyboard."))
+                    print(DIM("     It asks before its first screen action. Ctrl+C stops it any time. /computer turns it off."))
+                else:
+                    state["computer"] = None
+            else:
+                state["computer"] = None
+                start(args.brain, args.model)
+                print(DIM("  🖥️  Screen control is off (new conversation)."))
             continue
         if text in ("/resume", "/chats"):
             chat = pick_chat(root)

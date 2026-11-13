@@ -19,6 +19,14 @@ from volt_code.tools import TOOLS
 
 OnText = Callable[[str], None]
 
+COMPUTER_PROMPT = """
+
+Screen control is ON: you can see this computer's screen and use its mouse and keyboard
+with the computer tools. Take a screenshot first to see where things are, act in small
+steps, and take another screenshot to check each result. Prefer run_command or the file
+tools when they can do the job directly. Never enter passwords or payment details, and
+stop and ask the user before anything that deletes data, sends messages or buys things."""
+
 
 class BrainError(Exception):
     """The brain could not answer (no key, model missing, refused, offline)."""
@@ -30,6 +38,7 @@ class ToolCall:
     name: str
     input: dict
     error: Optional[str] = None  # set when the call can't be run as given
+    toolset: Optional[str] = None  # "computer" for screen, mouse and keyboard actions
 
 
 def check_input(name: str, args) -> Optional[str]:
@@ -57,7 +66,7 @@ def check_input(name: str, args) -> Optional[str]:
 class ClaudeBrain:
     label = "Claude"
 
-    def __init__(self, api_key: str, model: str, system: str, client=None):
+    def __init__(self, api_key: str, model: str, system: str, client=None, computer: bool = False):
         if client is None:
             import anthropic
 
@@ -70,6 +79,11 @@ class ClaudeBrain:
         # are then checked here before anything runs.
         self.tools = [{"name": t["name"], "description": t["description"],
                        "input_schema": t["parameters"], "eager_input_streaming": True} for t in TOOLS]
+        self.computer = computer
+        if computer:
+            # Claude's screen, mouse and keyboard tools (executed by volt_code.computer).
+            self.tools.append({"type": "computer_toolset_20260801"})
+            self.system = system + COMPUTER_PROMPT
 
     def add_user(self, text: str) -> None:
         if self.messages and self.messages[-1]["role"] == "user":
@@ -116,7 +130,8 @@ class ClaudeBrain:
                 raise BrainError(f"Claude returned an error ({exc.status_code}).")
 
         self.messages.append({"role": "assistant", "content": message.content})
-        calls = [ToolCall(b.id, b.name, b.input) for b in message.content if b.type == "tool_use"]
+        calls = [ToolCall(b.id, b.name, b.input, toolset=getattr(b, "toolset_name", None))
+                 for b in message.content if b.type == "tool_use"]
         if message.stop_reason == "refusal":
             for call in calls:
                 call.error = "Not run: the reply was stopped by a safety filter."
@@ -127,16 +142,21 @@ class ClaudeBrain:
                 call.error = "Not run: the request was cut off. Split the change into smaller steps."
         else:
             for call in calls:
+                if call.toolset:
+                    continue  # computer actions are checked when they run
                 call.error = check_input(call.name, call.input)
                 if call.error:
                     call.error = "INVALID_INPUT: " + call.error
         return calls
 
     def add_results(self, results: list[tuple[ToolCall, str, bool]]) -> None:
-        self.messages.append({"role": "user", "content": [
-            {"type": "tool_result", "tool_use_id": call.id, "content": output, "is_error": failed}
-            for call, output, failed in results
-        ]})
+        blocks = []
+        for call, output, failed in results:
+            block = {"type": "tool_result", "tool_use_id": call.id, "content": output, "is_error": failed}
+            if call.toolset:
+                block["toolset_name"] = call.toolset
+            blocks.append(block)
+        self.messages.append({"role": "user", "content": blocks})
 
 
 # --- Local model (Ollama) -----------------------------------------------------------
