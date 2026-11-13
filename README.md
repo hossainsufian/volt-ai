@@ -3,11 +3,35 @@
 **Volt AI** is a private, local-first AI assistant with text chat and voice, made by Sufian Hossain.
 It is a modified version of [Jarvis by Baris Sencan](https://github.com/isair/jarvis), shared free under the same non-commercial license (see [LICENSE](LICENSE)).
 
+## Install Volt AI
+
+Paste one line. It sets up everything: Volt AI, its own Python, and the free AI brain that runs on your computer (Ollama, about 2.3 GB to download the first time). No account and no subscription. Run the same line again any time to update.
+
+**Windows 10 or 11.** Open **PowerShell** and paste:
+
+```powershell
+irm https://raw.githubusercontent.com/hossainsufian/volt-ai/main/scripts/install/install.ps1 | iex
+```
+
+**Linux or macOS.** Open a **Terminal** and paste:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/hossainsufian/volt-ai/main/scripts/install/install.sh | bash
+```
+
+Then open **Volt AI** from the Start menu (Windows), the app menu (Linux) or **Applications** in your home folder (macOS). It also starts quietly when you log in.
+
+**Volt Code**, the coding assistant for the terminal, comes with it on Windows and Linux: open a new terminal and type `volt`.
+
+You need a 64-bit computer with at least 8 GB of RAM and about 6 GB of free disk space. On Linux the installer asks for your password once, to install Ollama. On macOS, install [Ollama](https://ollama.com/download) first if you don't use Homebrew.
+
+To remove it on Windows: **Settings → Apps → Volt AI → Uninstall** (your chats and settings are kept).
+
 ### What Volt AI changes
 
 - **New name and personality.** Volt is warm, direct and honest. It says when it isn't sure and doesn't invent facts. This replaces the original sarcastic-butler persona.
 - **Wake word "Volt".** Say "Volt, …" to talk to it.
-- **Chat-first.** The text chat window opens when the app starts. To turn this off, set `"open_chat_on_start": false` in `~/.config/jarvis/config.json`.
+- **Chat-first.** Opening Volt AI from the menu opens the chat window. When it starts with your computer it waits quietly in the tray (`"open_chat_on_start"` in `~/.config/jarvis/config.json` changes this).
 - **Runs on 8 GB laptops.** `qwen2.5:3b` is a supported model and speech recognition defaults to `small`, so CPU-only laptops don't run out of memory.
 - **No blocking start-up pop-up.** Using a model outside the recommended list is noted in the log; it no longer stops the app from starting.
 
