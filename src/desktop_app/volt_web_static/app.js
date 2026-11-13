@@ -124,7 +124,25 @@ function messageNode(m) {
     bubble.querySelector("img").alt = m.text || "Generated image";
     const actions = document.createElement("div"); actions.className = "msg-actions";
     actions.innerHTML = `<a href="${src}?download=1" download><button type="button">⬇ Download</button></a>`;
+    if (m.meta && m.meta.seed !== undefined) {
+      const again = document.createElement("button"); again.type = "button"; again.textContent = "🔁 Again";
+      again.title = "Make a new version of this picture";
+      again.onclick = () => remakeImage(m.id, null);
+      const change = document.createElement("button"); change.type = "button"; change.textContent = "✏️ Change";
+      change.title = "Change this picture, for example: make it night";
+      change.onclick = () => {
+        const what = prompt("What should change? For example: make it night, add a hat, blue background");
+        if (what && what.trim()) remakeImage(m.id, what.trim());
+      };
+      actions.append(again, change);
+    }
     bubble.appendChild(actions);
+    if (m.meta && m.meta.final_prompt && m.meta.final_prompt !== m.text) {
+      const used = document.createElement("details"); used.className = "prompt-used";
+      used.innerHTML = "<summary>Prompt used</summary><p></p>";
+      used.querySelector("p").textContent = m.meta.final_prompt;
+      bubble.appendChild(used);
+    }
   } else if (m.role === "assistant") {
     bubble.innerHTML = renderMarkdown(m.text || "");
     const actions = document.createElement("div"); actions.className = "msg-actions";
@@ -239,7 +257,9 @@ async function submit(e) {
     const chat = await ensureChat();
     els.input.value = ""; autosize();
     if (imageMode) {
-      await api(`/api/chats/${chat.id}/images`, { method: "POST", body: { prompt: text } });
+      await api(`/api/chats/${chat.id}/images`, { method: "POST", body: {
+        prompt: text, style: $("imgStyle").value || "auto", shape: $("imgShape").value || "square",
+        count: Number($("imgCount").value) || 1, enhance: $("imgEnhance").checked } });
       setImageMode(false);
     } else {
       await api(`/api/chats/${chat.id}/messages`, { method: "POST", body: { text, artifact: artifactOn() } });
@@ -327,8 +347,60 @@ $("artDownload").onclick = () => {
 els.artifactMode.onclick = () => setArtifactMode(!artifactOn());
 try { if (localStorage.getItem(ART_KEY) === "1") setArtifactMode(true); } catch (_) { /* private mode */ }
 
+async function remakeImage(id, change) {
+  try {
+    await api(`/api/images/${id}/${change ? "change" : "again"}`, { method: "POST", body: change ? { change } : {} });
+    if (state.current) openChat(state.current.id);
+  } catch (err) { toast(err.message); }
+}
+const IMG_PREFS = "volt.imageOptions";
+function renderImageOptions(s) {
+  const im = s.images || {};
+  const fill = (sel, items) => {
+    const key = JSON.stringify(items);
+    if (sel.dataset.key === key) return;
+    const keep = sel.value; sel.innerHTML = ""; sel.dataset.key = key;
+    for (const [value, label] of items || []) sel.add(new Option(label, value));
+    if (keep) sel.value = keep;
+  };
+  fill($("imgStyle"), im.styles); fill($("imgShape"), im.shapes);
+  try {
+    const saved = JSON.parse(localStorage.getItem(IMG_PREFS) || "{}");
+    if (saved.style && !$("imgStyle").dataset.restored) { $("imgStyle").value = saved.style; $("imgShape").value = saved.shape || "square";
+      $("imgCount").value = String(saved.count || 1); $("imgEnhance").checked = saved.enhance !== false; $("imgStyle").dataset.restored = "1"; }
+  } catch (_) { /* private mode */ }
+  if (!s.local) { $("imagesBox").hidden = true; return; }
+  $("imagesBox").hidden = !s.settings.images_enabled;
+  $("removeImgKey").hidden = $("imgModelRow").hidden = !im.has_key;
+  $("imgKey").placeholder = im.has_key ? "Paste a new key to replace it" : "Paste Pollinations key: sk_…";
+  if (im.has_key) $("imgKeyLine").innerHTML = `<small>✅ Pollinations key saved (${im.key_hint}): good models, no watermark, and ✏️ Change edits the real picture.</small>`;
+  fill($("imgModel"), [["", "Default (Z-Image Turbo)"], ...(im.models || [])]);
+  if (document.activeElement !== $("imgModel")) $("imgModel").value = s.settings.image_model || "";
+}
+function saveImagePrefs() {
+  try { localStorage.setItem(IMG_PREFS, JSON.stringify({ style: $("imgStyle").value, shape: $("imgShape").value,
+    count: Number($("imgCount").value), enhance: $("imgEnhance").checked })); } catch (_) { /* private mode */ }
+}
+["imgStyle", "imgShape", "imgCount", "imgEnhance"].forEach((id) => { $(id).onchange = saveImagePrefs; });
+$("imgModel").onchange = (e) => saveSetting("image_model", e.target.value);
+$("saveImgKey").onclick = async () => {
+  const key = $("imgKey").value.trim();
+  if (!key) { toast("Paste your Pollinations key first."); return; }
+  try {
+    await api("/api/images/key", { method: "POST", body: { key } });
+    $("imgKey").value = ""; toast("Pollinations key saved. Better pictures from now on.");
+  } catch (err) { toast(err.message); }
+  refreshState().catch(() => {});
+};
+$("removeImgKey").onclick = async () => {
+  if (!confirm("Remove your Pollinations key? Volt goes back to the free basic model.")) return;
+  await api("/api/images/key", { method: "POST", body: { key: "" } }).catch((e) => toast(e.message));
+  refreshState().catch(() => {});
+};
+
 function setImageMode(on) {
   els.imageMode.setAttribute("aria-pressed", String(on));
+  $("imageOpts").hidden = !on;
   if (on && els.artifactMode) els.artifactMode.setAttribute("aria-pressed", "false");
   els.input.placeholder = on ? "Describe the image you want…" : "Message Volt AI…";
 }
@@ -361,6 +433,7 @@ async function refreshState() {
   state.claude = s.claude || {};
   state.online = s.online || {};
   renderOnline(s);
+  renderImageOptions(s);
   renderFastModel(s);
   state.brain = s.brain || "fast";
   renderClaude(s);

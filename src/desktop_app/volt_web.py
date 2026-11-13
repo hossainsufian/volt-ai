@@ -41,12 +41,13 @@ from typing import Callable, Optional, Protocol
 
 from jarvis.debug import debug_log
 
-from desktop_app import volt_claude, volt_fast, volt_online, volt_system
+from desktop_app import volt_claude, volt_fast, volt_images, volt_online, volt_system
 from desktop_app.volt_store import VoltStore
 
 STATIC_DIR = Path(__file__).parent / "volt_web_static"
 COOKIE = "volt_session"
-IMAGE_API = "https://image.pollinations.ai/prompt/"
+IMAGE_RETRY_CAP_SEC = 60  # longest wait for the free image service before trying again
+IMAGE_MAX_COUNT = 4
 DEFAULT_PORT = 8765
 PAIR_MAX_FAILURES = 5
 PAIR_LOCKOUT_SEC = 300
@@ -61,6 +62,7 @@ DEFAULT_SETTINGS = {
     "online_enabled": False,  # answer with the online brain (Gemini) when a key is saved
     "claude_model": volt_claude.DEFAULT_MODEL,
     "system_analysis": False,  # add live RAM/CPU/GPU/disk readings to each message
+    "image_model": "",  # Pollinations model when a key is saved; empty = the default
     "fast_model": "",  # Ollama model for Fast mode; empty = the assistant's chat model
     "local_mode": "fast",  # "fast": one direct model call; "smart": full pipeline with tools
 }
@@ -125,6 +127,9 @@ class VoltWebServer:
         self._claude_client = None  # tests inject a fake client
         self._fast_post = None  # tests inject a fake HTTP post for fast mode
         self._online_post = None  # tests inject a fake HTTP post for the online brain
+        self._image_get = None  # tests inject fakes for the image service
+        self._image_post = None
+        self._enhance = None  # tests inject a fake prompt improver
         self._lock = threading.RLock()
         self._settings_path = store.data_dir / "settings.json"
         self._devices_path = store.data_dir / "devices.json"
@@ -168,6 +173,8 @@ class VoltWebServer:
                 elif key == "local_mode":
                     if value in LOCAL_MODES:
                         self.settings[key] = value
+                elif key == "image_model":
+                    self.settings[key] = value if value in volt_images.MODELS else ""
                 elif key == "fast_model":
                     self.settings[key] = str(value or "").strip()[:100]
                     threading.Thread(target=volt_fast.warm_up, daemon=True,
@@ -252,12 +259,13 @@ class VoltWebServer:
         mode = self.settings.get("local_mode", "fast")
         return mode if mode in LOCAL_MODES else "fast"
 
-    def _send(self, chat_id: str, text: str, artifact: bool = False) -> tuple[dict, int]:
+    def _send(self, chat_id: str, text: str, artifact: bool = False,
+              vector: Optional[str] = None) -> tuple[dict, int]:
         brain = self.brain()
-        if artifact and brain == "smart":
+        if (artifact or vector) and brain == "smart":
             brain = "fast"  # artifacts need the model's raw answer, not the assistant pipeline
         if brain in ("claude", "online", "fast"):
-            return self._send_streamed(chat_id, text, brain, artifact)
+            return self._send_streamed(chat_id, text, brain, artifact, vector)
         if not self.bridge.is_available():
             return {"error": "Volt AI is starting or stopped. Try again in a moment."}, 503
         if self.store.pending_message() is not None:
@@ -278,7 +286,7 @@ class VoltWebServer:
         return {"user": user, "reply": self.store.get_message(pending["id"])}, 200
 
     def _send_streamed(self, chat_id: str, text: str, brain: str,
-                       artifact: bool = False) -> tuple[dict, int]:
+                       artifact: bool = False, vector: Optional[str] = None) -> tuple[dict, int]:
         if self.store.pending_message() is not None:
             return {"error": "Volt AI is still answering. Wait for the reply first."}, 409
         if self.store.get_chat(chat_id) is None:
@@ -289,12 +297,12 @@ class VoltWebServer:
             user = self.store.add_message(chat_id, "user", text)
             pending = self.store.add_message(chat_id, "assistant", "", status="pending")
         threading.Thread(
-            target=self._stream_worker, args=(chat_id, pending["id"], brain, artifact), daemon=True
+            target=self._stream_worker, args=(chat_id, pending["id"], brain, artifact, vector), daemon=True
         ).start()
         return {"user": user, "reply": self.store.get_message(pending["id"])}, 200
 
     def _stream_worker(self, chat_id: str, message_id: int, brain: str,
-                       artifact: bool = False) -> None:
+                       artifact: bool = False, vector: Optional[str] = None) -> None:
         key = volt_claude.load_key() if brain == "claude" else None
         try:
             if brain == "claude" and not key:
@@ -318,7 +326,11 @@ class VoltWebServer:
             cloud = brain in ("claude", "online")  # big models: give them the full readings
             if self.settings.get("system_analysis") and (cloud or volt_system.is_about_computer(question)):
                 extra = volt_system.prompt_block("" if cloud else question)
-            if artifact:
+            if vector:
+                artifact = True  # same room for a long answer
+                prompt = volt_images.DIAGRAM_PROMPT if vector == "diagram" else volt_images.VECTOR_LOGO_PROMPT
+                extra = (extra + "\n\n" if extra else "") + prompt
+            elif artifact:
                 extra = (extra + "\n\n" if extra else "") + volt_fast.ARTIFACT_PROMPT
                 if brain == "fast":
                     turns = turns[-volt_fast.ARTIFACT_TURNS:]
@@ -362,41 +374,103 @@ class VoltWebServer:
 
     # --- Images ---------------------------------------------------------------
 
-    def _generate_image(self, chat_id: str, prompt: str) -> tuple[dict, int]:
+    def _generate_image(self, chat_id: str, prompt: str, style: str = "auto", shape: str = "square",
+                        count: int = 1, enhance: bool = True, model: Optional[str] = None) -> tuple[dict, int]:
         if not self.settings.get("images_enabled"):
             return {"error": "Image creation is off. Turn it on in Settings."}, 403
         if self.store.get_chat(chat_id) is None:
             return {"error": "Chat not found."}, 404
-        self.store.add_message(chat_id, "user", f"🎨 {prompt}")
-        pending = self.store.add_message(chat_id, "assistant", "", status="pending_image")
-        threading.Thread(
-            target=self._image_worker, args=(pending["id"], prompt), daemon=True
-        ).start()
-        return {"reply": pending}, 200
+        if style in volt_images.VECTOR_STYLES:
+            return self._send(chat_id, f"{volt_images.VECTOR_STYLES[style]}: {prompt}", vector=style)
+        style = style if style in volt_images.STYLES else "auto"
+        shape = shape if shape in volt_images.SHAPES else "square"
+        count = max(1, min(IMAGE_MAX_COUNT, int(count or 1)))
+        model = model if model in volt_images.MODELS else self.settings.get("image_model") or None
+        self.store.add_message(chat_id, "user", f"🎨 {prompt}",
+                               meta={"style": style, "shape": shape, "count": count})
+        pendings = [self.store.add_message(
+            chat_id, "assistant", "", status="pending_image",
+            meta={"prompt": prompt, "style": style, "shape": shape, "model": model,
+                  "seed": secrets.randbelow(2_000_000_000)}) for _ in range(count)]
+        threading.Thread(target=self._image_job, args=([p["id"] for p in pendings], enhance),
+                         daemon=True).start()
+        return {"reply": pendings[0], "replies": pendings}, 200
 
-    def _image_worker(self, message_id: int, prompt: str) -> None:
-        url = IMAGE_API + urllib.parse.quote(prompt, safe="") + "?width=1024&height=1024&nologo=true"
+    def _improve_prompt(self, idea: str, style: str) -> str:
+        """A detailed image description from a short idea (best effort: the idea itself on failure)."""
+        if self._enhance is not None:
+            return self._enhance(idea, style)
+        turns = [{"role": "user", "content": idea}]
         try:
-            get = self._http_get
-            if get is None:
-                import requests
-                get = requests.get
-            resp = get(url, timeout=180)
-            resp.raise_for_status()
-            ctype = resp.headers.get("Content-Type", "")
-            if not ctype.startswith("image/"):
-                raise ValueError(f"unexpected content type {ctype!r}")
-            suffix = ".png" if "png" in ctype else ".jpg"
-            name = self.store.save_image(resp.content, suffix)
-            self.store.update_message(message_id, text=prompt, image=name, status="done")
-            self.schedule_backup()
-            debug_log(f"volt image saved as {name}", "volt")
+            if volt_online.load() is not None:
+                text = volt_online.reply(turns, extra_system="\n\n" + volt_images.ENHANCE_PROMPT)
+            else:
+                text = volt_fast.reply(turns, extra_system=volt_images.ENHANCE_PROMPT,
+                                       model=self.settings.get("fast_model") or None, post=self._fast_post)
         except Exception as exc:
-            debug_log(f"volt image generation failed: {exc}", "volt")
-            self.store.update_message(
-                message_id, text="Couldn't create that image. Check your internet and try again.",
-                status="error",
-            )
+            debug_log(f"volt prompt improver failed: {type(exc).__name__}", "volt")
+            return idea
+        return volt_images.clean_enhanced(text, idea)
+
+    def _image_job(self, message_ids: list[int], enhance: bool = False, change: Optional[str] = None,
+                   source: Optional[str] = None) -> None:
+        """Make the pictures for these pending messages, one after another."""
+        first = self.store.get_message(message_ids[0])
+        meta = dict(first["meta"] or {})
+        final = meta.get("final_prompt") or meta.get("prompt", "")
+        if enhance and not change:
+            final = self._improve_prompt(meta.get("prompt", ""), meta.get("style", "auto"))
+        for mid in message_ids:
+            msg = self.store.get_message(mid)
+            meta = dict(msg["meta"] or {})
+            meta["final_prompt"] = final
+            try:
+                if change and source and volt_images.load_key():
+                    data = volt_images.edit(self.store.image_path(source).read_bytes(), change,
+                                            post=self._image_post)
+                    suffix = ".png" if data[:4] == b"\x89PNG" else ".jpg"
+                else:
+                    full = volt_images.styled_prompt(final, meta.get("style", "auto"))
+                    data, suffix = self._make_picture(full, meta)
+                name = self.store.save_image(data, suffix)
+                self.store.update_message(mid, text=meta.get("prompt", ""), image=name, status="done", meta=meta)
+                debug_log(f"volt image saved as {name}", "volt")
+            except volt_images.ImageError as exc:
+                self.store.update_message(mid, text=str(exc), status="error", meta=meta)
+            except Exception as exc:
+                debug_log(f"volt image generation failed: {type(exc).__name__}: {exc}", "volt")
+                self.store.update_message(mid, text="Couldn't create that image. Try again.", status="error")
+        self.schedule_backup()
+
+    def _make_picture(self, prompt: str, meta: dict) -> tuple[bytes, str]:
+        for attempt in range(4):
+            try:
+                return volt_images.generate(prompt, meta.get("shape", "square"), meta["seed"],
+                                            model=meta.get("model"), get=self._image_get)
+            except volt_images.RateLimited as exc:
+                if attempt == 3:
+                    raise
+                time.sleep(min(exc.seconds + 1, IMAGE_RETRY_CAP_SEC))
+        raise volt_images.ImageError("The image service is busy. Try again in a minute.")
+
+    def _remake_image(self, message_id: int, change: Optional[str] = None) -> tuple[dict, int]:
+        msg = self.store.get_message(message_id)
+        if not msg or msg["role"] != "assistant" or not msg.get("meta") or not msg.get("image"):
+            return {"error": "That picture can't be remade."}, 404
+        meta = dict(msg["meta"])
+        if change:
+            change = change.strip()[:500]
+            if not volt_images.load_key():
+                # No editing without a key: describe the change and keep the seed (similar layout).
+                meta["final_prompt"] = f"{meta.get('final_prompt') or meta.get('prompt', '')}, {change}"
+            meta["prompt"] = f"{meta.get('prompt', '')} → {change}"
+            self.store.add_message(msg["chat_id"], "user", f"✏️ {change}")
+        else:
+            meta["seed"] = secrets.randbelow(2_000_000_000)
+        pending = self.store.add_message(msg["chat_id"], "assistant", "", status="pending_image", meta=meta)
+        threading.Thread(target=self._image_job, args=([pending["id"]],),
+                         kwargs={"change": change, "source": msg["image"]}, daemon=True).start()
+        return {"reply": pending}, 200
 
     # --- Google Drive backup -------------------------------------------------
 
@@ -573,6 +647,16 @@ class VoltWebServer:
                 fast_models={
                     "installed": volt_fast.installed_models() if is_local() else [],
                     "default": volt_fast.model_and_url()[0],
+                },
+                images={
+                    "has_key": volt_images.load_key() is not None,
+                    "key_hint": volt_images.masked_key() if is_local() else None,
+                    "key_page": volt_images.KEY_PAGE,
+                    # Lists of [value, label] pairs: JSON objects lose their order here.
+                    "models": [[k, v] for k, v in volt_images.MODELS.items()],
+                    "styles": [[k, v[0]] for k, v in volt_images.STYLES.items()]
+                    + [[k, v] for k, v in volt_images.VECTOR_STYLES.items()],
+                    "shapes": [[k, v[0]] for k, v in volt_images.SHAPES.items()],
                 },
                 online={
                     "active": server.online_active(),
@@ -769,11 +853,49 @@ class VoltWebServer:
         @app.post("/api/chats/<chat_id>/images")
         def image(chat_id):
             require_auth()
-            prompt = str((request.get_json(silent=True) or {}).get("prompt", "")).strip()
+            data = request.get_json(silent=True) or {}
+            prompt = str(data.get("prompt", "")).strip()
             if not prompt:
                 return jsonify(error="Describe the image first."), 400
-            body, status = server._generate_image(chat_id, prompt[:1000])
+            try:
+                count = int(data.get("count", 1))
+            except (TypeError, ValueError):
+                count = 1
+            body, status = server._generate_image(
+                chat_id, prompt[:1000], style=str(data.get("style", "auto")),
+                shape=str(data.get("shape", "square")), count=count,
+                enhance=bool(data.get("enhance", True)), model=data.get("model"))
             return jsonify(body), status
+
+        @app.post("/api/images/<int:message_id>/again")
+        def image_again(message_id):
+            require_auth()
+            body, status = server._remake_image(message_id)
+            return jsonify(body), status
+
+        @app.post("/api/images/<int:message_id>/change")
+        def image_change(message_id):
+            require_auth()
+            change = str((request.get_json(silent=True) or {}).get("change", "")).strip()
+            if not change:
+                return jsonify(error="Say what to change."), 400
+            body, status = server._remake_image(message_id, change=change)
+            return jsonify(body), status
+
+        @app.post("/api/images/key")
+        def image_key():
+            require_auth()
+            if not is_local():
+                abort(403)  # keys are only entered on the computer itself
+            key = str((request.get_json(silent=True) or {}).get("key", "")).strip()
+            if not key:
+                volt_images.clear_key()
+                return jsonify(ok=True, has_key=False)
+            if not key.startswith("sk_") or len(key) < 12 or any(c.isspace() for c in key):
+                return jsonify(error="That doesn't look like a Pollinations secret key. It starts with sk_."), 400
+            volt_images.save_key(key)
+            debug_log("volt pollinations key saved", "volt")
+            return jsonify(ok=True, has_key=True, key_hint=volt_images.masked_key())
 
         @app.post("/api/stop")
         def stop():

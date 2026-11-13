@@ -250,3 +250,11 @@ select.chip.brain { appearance: none; -webkit-appearance: none; cursor: pointer;
 .artifact-info strong, .artifact-info small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .artifact-info small { color: var(--ink-soft); }
 .artifact-card .primary { padding: 6px 14px; }
+
+/* Image options and actions */
+.image-opts { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 10px 0; align-items: center; }
+.image-opts select { font: inherit; font-size: 13px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); }
+.img-enhance { font-size: 13px; color: var(--ink-soft); display: flex; gap: 4px; align-items: center; }
+.prompt-used { margin-top: 6px; font-size: 12px; color: var(--ink-soft); }
+.prompt-used summary { cursor: pointer; }
+.prompt-used p { margin: 4px 0 0; }

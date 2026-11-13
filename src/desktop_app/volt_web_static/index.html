@@ -52,6 +52,14 @@
 
       <footer class="composer-wrap">
         <form class="composer" id="composer">
+          <div class="image-opts" id="imageOpts" hidden>
+            <select id="imgStyle" aria-label="Style"></select>
+            <select id="imgShape" aria-label="Shape"></select>
+            <select id="imgCount" aria-label="How many">
+              <option value="1">1 picture</option><option value="2">2 pictures</option><option value="4">4 pictures</option>
+            </select>
+            <label class="img-enhance"><input type="checkbox" id="imgEnhance" checked> ✨ Improve my prompt</label>
+          </div>
           <textarea id="input" rows="1" placeholder="Message Volt AI…" aria-label="Message Volt AI"></textarea>
           <div class="composer-row">
             <button type="button" class="chip" id="imageMode" aria-pressed="false" title="Create an image">🎨 Image</button>
@@ -91,8 +99,17 @@
       <h2>Settings</h2>
       <label class="toggle">
         <input type="checkbox" id="setImages">
-        <span><strong>Create images</strong><br><small>Uses the free Pollinations.ai service. Your image descriptions are sent to their servers.</small></span>
+        <span><strong>Create images</strong><br><small>Uses Pollinations.ai. Your image descriptions are sent to their servers.</small></span>
       </label>
+      <div class="account" id="imagesBox">
+        <p id="imgKeyLine"><small>Without a key Volt uses Pollinations' free basic model (about one picture every 45 seconds, with a watermark). A free account key unlocks much better models, no watermark and real picture editing: sign in at <a href="https://enter.pollinations.ai/keys" target="_blank" rel="noopener">enter.pollinations.ai/keys</a>, create a <b>secret key</b> (starts with sk_) and paste it here.</small></p>
+        <p id="imgModelRow" hidden><label>Image model: <select id="imgModel"></select></label></p>
+        <div class="account-buttons">
+          <input type="password" id="imgKey" class="key-input" placeholder="Paste Pollinations key: sk_…" autocomplete="off" spellcheck="false">
+          <button type="button" class="primary" id="saveImgKey">Save key</button>
+          <button type="button" class="link" id="removeImgKey" hidden>Remove key</button>
+        </div>
+      </div>
       <label class="toggle" id="phoneRow">
         <input type="checkbox" id="setPhone">
         <span><strong>Use Volt on my phone</strong><br><small>Phones can connect after entering the phone password you set below.</small></span>

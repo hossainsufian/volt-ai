@@ -16,6 +16,7 @@ while the desktop app records replies from the Qt main thread.
 
 from __future__ import annotations
 
+import json
 import os
 import sqlite3
 import threading
@@ -65,6 +66,16 @@ def _title_from(text: str) -> str:
     return title or "New chat"
 
 
+def _with_meta(row) -> dict:
+    """A message row as a dict, with its JSON settings (meta) decoded."""
+    out = dict(row)
+    try:
+        out["meta"] = json.loads(out["meta"]) if out.get("meta") else None
+    except ValueError:
+        out["meta"] = None
+    return out
+
+
 class VoltStore:
     """Persistent chats, messages and image files."""
 
@@ -79,6 +90,9 @@ class VoltStore:
         self._db.row_factory = sqlite3.Row
         self._db.execute("PRAGMA foreign_keys = ON")
         self._db.executescript(_SCHEMA)
+        columns = {r[1] for r in self._db.execute("PRAGMA table_info(messages)")}
+        if "meta" not in columns:  # chats saved before messages carried settings
+            self._db.execute("ALTER TABLE messages ADD COLUMN meta TEXT")
         self._db.commit()
         debug_log(f"volt store opened at {self.data_dir}", "volt")
 
@@ -149,6 +163,7 @@ class VoltStore:
         *,
         image: Optional[str] = None,
         status: str = "done",
+        meta: Optional[dict] = None,
     ) -> dict:
         if role not in ("user", "assistant", "system"):
             raise ValueError(f"unknown role: {role}")
@@ -157,9 +172,9 @@ class VoltStore:
             if self.get_chat(chat_id) is None:
                 raise KeyError(chat_id)
             cur = self._db.execute(
-                "INSERT INTO messages (chat_id, role, text, image, status, created)"
-                " VALUES (?, ?, ?, ?, ?, ?)",
-                (chat_id, role, text, image, status, now),
+                "INSERT INTO messages (chat_id, role, text, image, status, created, meta)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (chat_id, role, text, image, status, now, json.dumps(meta) if meta else None),
             )
             # The first user message names a fresh chat.
             if role == "user":
@@ -184,9 +199,11 @@ class VoltStore:
         text: Optional[str] = None,
         image: Optional[str] = None,
         status: Optional[str] = None,
+        meta: Optional[dict] = None,
     ) -> Optional[dict]:
         fields, values = [], []
-        for name, value in (("text", text), ("image", image), ("status", status)):
+        for name, value in (("text", text), ("image", image), ("status", status),
+                            ("meta", json.dumps(meta) if meta is not None else None)):
             if value is not None:
                 fields.append(f"{name} = ?")
                 values.append(value)
@@ -203,28 +220,28 @@ class VoltStore:
     def get_message(self, message_id: int) -> Optional[dict]:
         with self._lock:
             row = self._db.execute(
-                "SELECT id, chat_id, role, text, image, status, created FROM messages WHERE id = ?",
+                "SELECT id, chat_id, role, text, image, status, created, meta FROM messages WHERE id = ?",
                 (message_id,),
             ).fetchone()
-        return dict(row) if row else None
+        return _with_meta(row) if row else None
 
     def messages(self, chat_id: str) -> list[dict]:
         with self._lock:
             rows = self._db.execute(
-                "SELECT id, chat_id, role, text, image, status, created FROM messages"
+                "SELECT id, chat_id, role, text, image, status, created, meta FROM messages"
                 " WHERE chat_id = ? ORDER BY id",
                 (chat_id,),
             ).fetchall()
-        return [dict(r) for r in rows]
+        return [_with_meta(r) for r in rows]
 
     def pending_message(self) -> Optional[dict]:
         """The assistant reply currently being generated, if any."""
         with self._lock:
             row = self._db.execute(
-                "SELECT id, chat_id, role, text, image, status, created FROM messages"
+                "SELECT id, chat_id, role, text, image, status, created, meta FROM messages"
                 " WHERE status = 'pending' ORDER BY id DESC LIMIT 1"
             ).fetchone()
-        return dict(row) if row else None
+        return _with_meta(row) if row else None
 
     def fail_stale_pending(self, reason: str) -> None:
         """Close replies left pending by a previous run that ended mid-answer."""
