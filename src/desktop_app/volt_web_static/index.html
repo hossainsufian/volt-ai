@@ -23,6 +23,7 @@
       <div class="sidebar-foot">
         <button class="foot-btn" id="openGallery"><span aria-hidden="true">🖼</span> Images</button>
         <button class="foot-btn" id="openArtifacts"><span aria-hidden="true">🧩</span> Artifacts</button>
+        <button class="foot-btn" id="openCode"><span aria-hidden="true">💻</span> Volt Code</button>
         <button class="foot-btn" id="openSettings"><span aria-hidden="true">⚙</span> Settings</button>
       </div>
     </aside>
@@ -193,6 +194,28 @@
       <menu><button class="primary" value="close">Close</button></menu>
     </form>
   </dialog>
+
+  <dialog id="codeSheet" class="sheet wide">
+    <form method="dialog" class="sheet-body">
+      <h2>Volt Code sessions</h2>
+      <p><small>Terminal sessions shared with this app. In Volt Code, type <b>/rc</b> to share one.</small></p>
+      <div class="artifact-list" id="codeList"></div>
+      <menu><button class="primary" value="close">Close</button></menu>
+    </form>
+  </dialog>
+
+  <section class="rc-view" id="rcView" hidden aria-label="Volt Code session">
+    <header class="rc-head">
+      <button type="button" class="art-btn" id="rcBack" aria-label="Back">←</button>
+      <div class="rc-title"><strong id="rcTitle">Volt Code</strong><small id="rcSub"></small></div>
+      <button type="button" class="art-btn" id="rcStop" title="Stop what Volt Code is doing">■ Stop</button>
+    </header>
+    <div class="rc-log" id="rcLog"></div>
+    <form class="rc-composer" id="rcForm">
+      <textarea id="rcInput" rows="1" placeholder="Message Volt Code…" aria-label="Message Volt Code"></textarea>
+      <button type="submit" class="send" aria-label="Send">↑</button>
+    </form>
+  </section>
 
   <script src="/static/app.js"></script>
 </body>

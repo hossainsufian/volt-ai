@@ -605,6 +605,98 @@ async function openArtifactsSheet() {
 }
 $("openArtifacts").onclick = () => openArtifactsSheet().catch((e) => toast(e.message));
 
+// --- Volt Code remote control (/rc) ----------------------------------------------------
+const rc = { id: null, after: 0, timer: null, answered: new Set() };
+async function openCodeSheet() {
+  const list = $("codeList"); list.innerHTML = "";
+  const { sessions } = await api("/api/rc/sessions");
+  if (!sessions.length) {
+    list.innerHTML = '<p class="empty-note">No shared sessions. Open Volt Code in a terminal and type <b>/rc</b>.</p>';
+  }
+  for (const s of sessions) {
+    const card = document.createElement("div"); card.className = "artifact-card";
+    card.innerHTML = `<div class="artifact-icon" aria-hidden="true">${s.online ? "🟢" : "⚪"}</div>
+      <div class="artifact-info"><strong></strong><small></small></div><button type="button" class="primary">Open</button>`;
+    card.querySelector("strong").textContent = s.title;
+    card.querySelector("small").textContent = `${s.host} · ${s.folder}${s.online ? "" : " · offline"}`;
+    card.querySelector("button").onclick = () => { $("codeSheet").close(); openSession(s); };
+    list.appendChild(card);
+  }
+  closeMenu(); $("codeSheet").showModal();
+}
+function openSession(s) {
+  rc.id = s.id; rc.after = 0; rc.answered = new Set();
+  $("rcTitle").textContent = s.title; $("rcSub").textContent = `${s.host} · ${s.folder}`;
+  $("rcLog").innerHTML = ""; $("rcView").hidden = false;
+  pollSession();
+}
+function closeSession() { clearTimeout(rc.timer); rc.id = null; $("rcView").hidden = true; }
+function rcLine(cls, html) {
+  const el = document.createElement("div"); el.className = "rc-line " + cls; el.innerHTML = html;
+  $("rcLog").appendChild(el); return el;
+}
+function renderEvent(e) {
+  const log = $("rcLog");
+  log.querySelectorAll(".rc-thinking").forEach((n) => n.remove());
+  if (e.type === "user") rcLine("rc-user", `<span class="who">${e.from === "app" ? "📱 You" : "⌨️ You"}</span> ` + escapeHtml(e.text));
+  else if (e.type === "assistant") rcLine("rc-assistant", "<b>⏺</b> " + renderMarkdown(e.text));
+  else if (e.type === "tool") rcLine("rc-tool", `<b class="dot">⏺</b> <b>${escapeHtml(e.label)}</b>`);
+  else if (e.type === "tool_result") rcLine("rc-result" + (e.failed ? " bad" : ""), "⎿ " + escapeHtml(e.text));
+  else if (e.type === "status") rcLine("rc-status", escapeHtml(e.text));
+  else if (e.type === "thinking") rcLine("rc-thinking", '<span class="thinking"><i></i><i></i><i></i></span> Thinking…');
+  else if (e.type === "approval_done") {
+    rc.answered.add(e.id);
+    const card = log.querySelector(`[data-approval="${e.id}"]`);
+    if (card) { card.querySelectorAll("button").forEach((b) => b.remove());
+      card.insertAdjacentHTML("beforeend", `<p class="rc-done">${e.answer === "no" ? "✗ Not allowed" : "✓ Allowed"}</p>`); }
+  } else if (e.type === "approval") {
+    const card = rcLine("rc-approval", `<b>✋ ${escapeHtml(e.title)}</b><pre></pre>`);
+    card.dataset.approval = e.id;
+    card.querySelector("pre").textContent = e.detail || "";
+    if (!rc.answered.has(e.id)) {
+      const row = document.createElement("div"); row.className = "msg-actions";
+      for (const [answer, label] of [["yes", "✓ Allow"], ["always", "Always allow"], ["no", "✗ Deny"]]) {
+        const b = document.createElement("button"); b.type = "button"; b.textContent = label;
+        b.onclick = () => api(`/api/rc/sessions/${rc.id}/input`, { method: "POST", body: { approval: e.id, answer } })
+          .catch((err) => toast(err.message));
+        row.appendChild(b);
+      }
+      card.appendChild(row);
+    }
+  }
+}
+async function pollSession() {
+  clearTimeout(rc.timer);
+  if (!rc.id) return;
+  try {
+    const atBottom = $("rcLog").scrollHeight - $("rcLog").scrollTop - $("rcLog").clientHeight < 80;
+    const { events } = await api(`/api/rc/sessions/${rc.id}/events?after=${rc.after}`);
+    for (const e of events) { renderEvent(e); rc.after = e.seq; }
+    if (events.length && atBottom) $("rcLog").scrollTop = $("rcLog").scrollHeight;
+  } catch (err) {
+    if (/not found|404/i.test(err.message)) { rcLine("rc-status", "This session has ended."); return; }
+  }
+  rc.timer = setTimeout(pollSession, 1000);
+}
+$("openCode").onclick = () => openCodeSheet().catch((e) => toast(e.message));
+$("rcBack").onclick = closeSession;
+$("rcStop").onclick = () => api(`/api/rc/sessions/${rc.id}/input`, { method: "POST", body: { stop: true } })
+  .then(() => toast("Asked Volt Code to stop.")).catch((e) => toast(e.message));
+$("rcForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const text = $("rcInput").value.trim();
+  if (!text || !rc.id) return;
+  try {
+    await api(`/api/rc/sessions/${rc.id}/input`, { method: "POST", body: { text } });
+    $("rcInput").value = "";
+  } catch (err) { toast(err.message); }
+});
+$("rcInput").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey && !e.isComposing && window.matchMedia("(min-width: 761px)").matches) {
+    e.preventDefault(); $("rcForm").requestSubmit();
+  }
+});
+
 // --- Wiring ----------------------------------------------------------------------
 function greet() {
   const h = new Date().getHours();

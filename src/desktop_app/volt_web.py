@@ -41,7 +41,7 @@ from typing import Callable, Optional, Protocol
 
 from jarvis.debug import debug_log
 
-from desktop_app import volt_claude, volt_fast, volt_images, volt_online, volt_system
+from desktop_app import volt_claude, volt_fast, volt_images, volt_online, volt_rc, volt_system
 from desktop_app.volt_store import VoltStore
 
 STATIC_DIR = Path(__file__).parent / "volt_web_static"
@@ -130,6 +130,7 @@ class VoltWebServer:
         self._image_get = None  # tests inject fakes for the image service
         self._image_post = None
         self._enhance = None  # tests inject a fake prompt improver
+        self.rc = volt_rc.RemoteSessions()  # Volt Code terminals shared with the app (/rc)
         self._lock = threading.RLock()
         self._settings_path = store.data_dir / "settings.json"
         self._devices_path = store.data_dir / "devices.json"
@@ -912,6 +913,78 @@ class VoltWebServer:
                                                 status="done")
                 else:
                     server.store.update_message(pending["id"], text="Stopped.", status="error")
+            return jsonify(ok=True)
+
+        # --- Volt Code remote control (/rc) -------------------------------------------
+        def rc_session(sid):
+            if not server.rc.exists(sid):
+                abort(404)
+
+        @app.post("/api/rc/sessions")
+        def rc_create():
+            require_auth()
+            data = request.get_json(silent=True) or {}
+            sid = server.rc.create(str(data.get("title", "")), str(data.get("folder", "")), str(data.get("host", "")))
+            debug_log("volt code session shared with the app", "volt")
+            return jsonify(id=sid)
+
+        @app.get("/api/rc/sessions")
+        def rc_list():
+            require_auth()
+            return jsonify(sessions=server.rc.list())
+
+        @app.post("/api/rc/sessions/<sid>/events")
+        def rc_events_add(sid):
+            require_auth()
+            rc_session(sid)
+            events = (request.get_json(silent=True) or {}).get("events") or []
+            server.rc.add_events(sid, [e for e in events if isinstance(e, dict)][:200])
+            return jsonify(ok=True)
+
+        @app.get("/api/rc/sessions/<sid>/events")
+        def rc_events(sid):
+            require_auth()
+            rc_session(sid)
+            try:
+                after = int(request.args.get("after", 0))
+            except ValueError:
+                after = 0
+            return jsonify(events=server.rc.events(sid, after=after))
+
+        @app.get("/api/rc/sessions/<sid>/inbox")
+        def rc_inbox(sid):
+            require_auth()
+            rc_session(sid)
+            try:
+                wait = float(request.args.get("wait", 25))
+            except ValueError:
+                wait = 25
+            return jsonify(inbox=server.rc.take_inbox(sid, wait=wait))
+
+        @app.post("/api/rc/sessions/<sid>/input")
+        def rc_input(sid):
+            require_auth()
+            rc_session(sid)
+            data = request.get_json(silent=True) or {}
+            if data.get("stop"):
+                item = {"stop": True}
+            elif "approval" in data:
+                if data.get("answer") not in ("yes", "always", "no"):
+                    return jsonify(error="Answer yes, always or no."), 400
+                item = {"approval": str(data["approval"]), "answer": data["answer"]}
+            else:
+                text = str(data.get("text", "")).strip()
+                if not text:
+                    return jsonify(error="Type a message first."), 400
+                item = {"text": text[:20000]}
+            server.rc.send(sid, item)
+            return jsonify(ok=True)
+
+        @app.delete("/api/rc/sessions/<sid>")
+        def rc_end(sid):
+            require_auth()
+            rc_session(sid)
+            server.rc.end(sid)
             return jsonify(ok=True)
 
         @app.get("/api/artifacts")

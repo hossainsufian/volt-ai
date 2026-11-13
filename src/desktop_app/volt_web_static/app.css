@@ -260,3 +260,25 @@ select.chip.brain { appearance: none; -webkit-appearance: none; cursor: pointer;
 .prompt-used p { margin: 4px 0 0; }
 
 .svg-art img { background: #fff; border-radius: 12px; border: 1px solid var(--line); max-width: min(100%, 420px); display: block; }
+
+/* Volt Code session view (/rc) */
+.rc-view { position: fixed; inset: 0; z-index: 60; background: var(--bg, #f6f3ec); display: flex; flex-direction: column; }
+.rc-view[hidden] { display: none; }
+.rc-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); background: var(--surface); }
+.rc-title { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.rc-title small { color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rc-log { flex: 1; overflow-y: auto; padding: 14px; font: 14px/1.5 var(--mono); }
+.rc-line { margin: 6px 0; white-space: pre-wrap; word-break: break-word; }
+.rc-user { background: var(--accent-soft); border-radius: 10px; padding: 8px 10px; font-family: var(--sans, inherit); }
+.rc-user .who { color: var(--accent); font-weight: 600; }
+.rc-assistant { font-family: var(--sans, inherit); }
+.rc-assistant p { display: inline; margin: 0; }
+.rc-tool .dot { color: #3a9a4a; }
+.rc-result { color: var(--ink-soft); padding-left: 18px; }
+.rc-result.bad { color: var(--danger); }
+.rc-status, .rc-thinking { color: var(--ink-soft); font-style: italic; }
+.rc-approval { border: 1px solid var(--accent); border-radius: 12px; padding: 10px 12px; background: var(--surface); }
+.rc-approval pre { max-height: 220px; overflow: auto; margin: 6px 0; font-size: 12px; }
+.rc-done { margin: 4px 0 0; color: var(--ink-soft); }
+.rc-composer { display: flex; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--line); background: var(--surface); }
+.rc-composer textarea { flex: 1; resize: none; font: inherit; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg, #fff); color: var(--ink); }

@@ -18,6 +18,7 @@ import platform
 import sys
 import time
 from pathlib import Path
+from typing import Optional
 
 from volt_code import features, sessions
 from volt_code.agent import run_turn
@@ -73,6 +74,7 @@ HELP = f"""
     /permissions       switch mode: ask · accept edits · plan (read-only)
     /status            brain, folder, mode and memory
     /computer          let Volt see the screen and use mouse and keyboard (needs Claude)
+    /rc                remote control: show this session in the Volt app (phone or desktop)
     /exit              quit (or Ctrl+D)
   {BOLD('In your message')}
     @path/to/file      attach a file           !command    run a shell command yourself
@@ -94,12 +96,20 @@ class TerminalUI:
         self.always: set[str] = set()
         self.mode = mode
         self._spin = None
+        self.link = None  # RemoteLink while /rc is on
+        self.hub = None  # queue of keyboard lines (str) and app items (dict) while /rc is on
+        self._buf = ""
+
+    def emit(self, event: dict) -> None:
+        if self.link is not None:
+            self.link.emit(event)
 
     # --- spinner -------------------------------------------------------------------
     def thinking(self) -> None:
         import threading
 
         self._stop_spin()
+        self.emit({"type": "thinking"})
         if not sys.stdout.isatty():
             return
         stop = threading.Event()
@@ -132,6 +142,7 @@ class TerminalUI:
         if not self.writing:
             print("\n" + BOLD("⏺ "), end="")
             self.writing = True
+        self._buf += text
         print(text, end="", flush=True)
 
     def end_text(self) -> None:
@@ -139,14 +150,20 @@ class TerminalUI:
         if self.writing:
             print()
             self.writing = False
+        if self._buf.strip():
+            self.emit({"type": "assistant", "text": self._buf})
+        self._buf = ""
 
     def tool_start(self, call) -> None:
         self._stop_spin()
         print("\n" + GREEN("⏺ ") + BOLD(features.tool_label(call)))
+        self.emit({"type": "tool", "label": features.tool_label(call)})
 
     def tool_done(self, call, output, failed: bool) -> None:
         self._stop_spin()
-        print(("  ⎿  " + RED(self._summary(call, output))) if failed else DIM("  ⎿  " + self._summary(call, output)))
+        summary = self._summary(call, output)
+        print(("  ⎿  " + RED(summary)) if failed else DIM("  ⎿  " + summary))
+        self.emit({"type": "tool_result", "text": summary, "failed": failed})
 
     @staticmethod
     def _summary(call, output) -> str:
@@ -167,9 +184,38 @@ class TerminalUI:
             return shown + (f"\n     … +{len(lines) - 6} lines" if len(lines) > 6 else "")
         return lines[0][:160]
 
+    def _approve_shared(self, kind: str, title: str, detail: str) -> bool:
+        """While /rc is on: answer in the terminal (1/2/3) or with the buttons in the app."""
+        import uuid
+
+        aid = uuid.uuid4().hex[:10]
+        self.emit({"type": "approval", "id": aid, "title": title, "detail": detail[:6000]})
+        print(BOLD("╰─ Do you want to proceed?") + "  1. Yes   2. Yes, don't ask again   3. No"
+              + DIM("   (type 1/2/3 here, or answer in the Volt app)"))
+        stash, answer = [], None
+        while answer is None:
+            item = self.hub.get()
+            if isinstance(item, dict) and item.get("approval") == aid:
+                answer = item.get("answer")
+            elif isinstance(item, str) and item.strip().lower() in ("1", "y", "yes", "2", "a", "always", "3", "n", "no"):
+                answer = {"1": "yes", "y": "yes", "yes": "yes", "2": "always", "a": "always",
+                          "always": "always"}.get(item.strip().lower(), "no")
+            elif item is None:
+                answer = "no"
+            else:
+                stash.append(item)  # a message for later
+        for item in stash:
+            self.hub.put(item)
+        self.emit({"type": "approval_done", "id": aid, "answer": answer})
+        print(DIM(f"  ⎿  {'Allowed' if answer != 'no' else 'Not allowed'}"))
+        if answer == "always":
+            self.always.add(kind)
+        return answer in ("yes", "always")
+
     def notice(self, message: str) -> None:
         self._stop_spin()
         print(ACCENT("  ⚠️  " + message))
+        self.emit({"type": "status", "text": message})
 
     # --- permissions ------------------------------------------------------------------
     def approve(self, title: str, detail: str) -> bool:
@@ -191,6 +237,8 @@ class TerminalUI:
             elif line.startswith("-") and not line.startswith("---"):
                 line = RED(line)
             print("│ " + line)
+        if self.hub is not None:
+            return self._approve_shared(kind, title, detail)
         from volt_code.picker import choose
 
         picked = choose(BOLD("╰─ Do you want to proceed?"), "",
@@ -404,20 +452,97 @@ def main(argv=None) -> int:
             state["brain"].messages.append({"role": "assistant", "content": "Thanks, I have the context. What next?"})
             print(DIM(f"  {STAR} Conversation compacted. ") + DIM("(the summary keeps the important parts)"))
 
-    while True:
+    def read_line() -> Optional[str]:
+        """Next line from the keyboard (None on Ctrl+D), or from the hub while /rc is on."""
+        if ui.hub is not None:
+            item = ui.hub.get()
+            if isinstance(item, dict):
+                if item.get("text"):
+                    print(ACCENT("\n📱 ") + item["text"])
+                    return "\x00app:" + item["text"]
+                return ""  # a stray stop/approval: nothing to do now
+            return item
         mode_text = features.MODE_TEXT.get(state["mode"], "")
         if mode_text:
             print(ACCENT(f"  {mode_text}") + DIM("  (/permissions to change)"))
+        text = input(PROMPT).strip()
+        while text.endswith("\\"):  # a trailing backslash continues on the next line
+            text = text[:-1] + "\n" + input("  ").strip()
+        return text
+
+    def rc_start() -> None:
+        from volt_code import remote
+
+        cfg = remote.load_config()
         try:
-            text = input(PROMPT).strip()
-            while text.endswith("\\"):  # a trailing backslash continues on the next line
-                text = text[:-1] + "\n" + input("  ").strip()
+            if cfg is None:
+                print(DIM("  ⎿  Share this session with the Volt app. Sign in once with your Volt phone password."))
+                url = input(f"     Volt address [{remote.DEFAULT_URL}]: ").strip() or remote.DEFAULT_URL
+                import getpass
+
+                token = remote.pair(url, getpass.getpass("     Phone password: "))
+                remote.save_config(url, token)
+                cfg = remote.load_config()
+            link = remote.RemoteLink(cfg["url"], cfg["token"], f"Volt Code · {root.name}", str(root))
+        except remote.RemoteError as exc:
+            print(RED(f"  ❌ {exc}"))
+            if "Sign in again" in str(exc):
+                remote.config_path().unlink(missing_ok=True)
+            return
+        import _thread
+        import queue
+        import threading
+
+        # Keyboard lines (str) and app items (dict) meet in one queue; Stop interrupts the turn.
+        hub: "queue.Queue" = queue.Queue()
+
+        def on_item(item):
+            if item.get("stop"):
+                _thread.interrupt_main()  # same as Ctrl+C
+            else:
+                hub.put(item)
+
+        link.inbox = type("Inbox", (), {"put": staticmethod(on_item)})()
+
+        def keyboard():
+            while True:
+                try:
+                    hub.put(input().strip())
+                except (EOFError, KeyboardInterrupt):
+                    hub.put(None)
+                    return
+
+        threading.Thread(target=keyboard, daemon=True).start()
+        ui.link, ui.hub = link, hub
+        import atexit
+
+        atexit.register(lambda: ui.link.close() if ui.link is not None else None)
+        link.emit({"type": "status", "text": f"Connected: {state['name']} in {root}"})
+        print(ACCENT("  📱 Remote control is ON.") + DIM(" Open the Volt app → 💻 Volt Code to watch and reply."))
+        print(DIM("     Type here as usual too. /rc again turns it off."))
+
+    def rc_stop() -> None:
+        ui.link.close()
+        ui.link = ui.hub = None
+        print(DIM("  ⎿  Remote control is off."))
+
+    while True:
+        try:
+            text = read_line()
         except EOFError:
             print()
             return 0
         except KeyboardInterrupt:
             print()
             continue
+        if text is None:
+            return 0
+        from_app = text.startswith("\x00app:")
+        if from_app:
+            text = text[len("\x00app:"):]
+            ui.emit({"type": "user", "text": text, "from": "app"})
+        else:
+            ui.emit({"type": "user", "text": text})
         if not text:
             continue
         if text in ("/exit", "/quit", "exit", "quit"):
@@ -482,7 +607,13 @@ def main(argv=None) -> int:
                 start(args.brain, args.model)
                 print(DIM("  🖥️  Screen control is off (new conversation)."))
             continue
+        if text == "/rc":
+            rc_start() if ui.link is None else rc_stop()
+            continue
         if text in ("/resume", "/chats"):
+            if ui.link is not None:
+                print(DIM("  ⎿  Turn off remote control (/rc) before resuming another chat."))
+                continue
             chat = pick_chat(root)
             if chat is not None:
                 resume(chat)
