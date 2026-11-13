@@ -37,7 +37,13 @@ def paint(code: str, text: str) -> str:
 
 ACCENT = lambda t: paint("38;5;209", t)  # noqa: E731  Volt orange
 # readline needs colour codes in the prompt wrapped in \001…\002 to measure its width.
-PROMPT = "\001\033[1m\002> \001\033[0m\002" if COLOUR else "> "
+try:
+    import readline as _readline  # noqa: F401
+    HAVE_READLINE = True
+except ImportError:  # Windows: no readline, and \001/\002 would print as ☺☻
+    HAVE_READLINE = False
+PROMPT = (("\001\033[1m\002> \001\033[0m\002" if HAVE_READLINE else "\033[1m> \033[0m")
+          if COLOUR else "> ")
 DIM = lambda t: paint("2", t)  # noqa: E731
 GREEN = lambda t: paint("32", t)  # noqa: E731
 RED = lambda t: paint("31", t)  # noqa: E731
