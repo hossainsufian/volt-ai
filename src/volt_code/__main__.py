@@ -80,7 +80,9 @@ HELP = f"""
   Ctrl+C stops Volt while it's working.
 """
 
-SPINNER = "✻✶✳✢·✢✳✶"
+# The Windows console font has no ✻-style stars; use plain characters there.
+SPINNER = "|/-\\" if sys.platform == "win32" else "✻✶✳✢·✢✳✶"
+STAR = "*" if sys.platform == "win32" else "✻"
 
 
 class TerminalUI:
@@ -400,7 +402,7 @@ def main(argv=None) -> int:
         if start(BRAIN_CHOICE.get(label, "local"), args.model):
             state["brain"].add_user(f"Summary of our conversation so far:\n{summary}")
             state["brain"].messages.append({"role": "assistant", "content": "Thanks, I have the context. What next?"})
-            print(DIM("  ✻ Conversation compacted. ") + DIM("(the summary keeps the important parts)"))
+            print(DIM(f"  {STAR} Conversation compacted. ") + DIM("(the summary keeps the important parts)"))
 
     while True:
         mode_text = features.MODE_TEXT.get(state["mode"], "")
@@ -502,10 +504,10 @@ def main(argv=None) -> int:
 def welcome(root: Path, brain_name: str) -> None:
     """Claude Code-style welcome box."""
     width = 58
-    inner = [ACCENT("✻") + " " + BOLD("Welcome to Volt Code!"), "",
+    inner = [ACCENT(STAR) + " " + BOLD("Welcome to Volt Code!"), "",
              DIM("  /help for help, /status for your current setup"), "",
              DIM(f"  cwd: {str(root)[-(width - 9):]}"), DIM(f"  brain: {brain_name[:width - 11]}")]
-    visible = ["✻ Welcome to Volt Code!", "", "  /help for help, /status for your current setup", "",
+    visible = [f"{STAR} Welcome to Volt Code!", "", "  /help for help, /status for your current setup", "",
                f"  cwd: {str(root)[-(width - 9):]}", f"  brain: {brain_name[:width - 11]}"]
     print("\n" + ACCENT("╭" + "─" * width + "╮"))
     for shown, plain in zip(inner, visible):
