@@ -53,3 +53,32 @@ def test_empty_chats_are_not_saved(tmp_path):
     project = tmp_path / "proj"
     sessions.Session.new(project, "Local").save(LocalBrain("m", "http://x", "sys"))
     assert sessions.latest(project) is None
+
+
+def test_picker_moves_searches_and_picks():
+    from volt_code.picker import DOWN, ENTER, ESC, UP, BACKSPACE, Picker
+
+    p = Picker(["fix tests", "build quiz app", "make a logo"], ["fix tests", "build quiz app", "make a logo"])
+    p.press(DOWN); p.press(DOWN); p.press(DOWN)
+    assert p.chosen == 2                      # stops at the last row
+    p.press(UP)
+    assert p.chosen == 1
+    for ch in "LOGO":
+        p.press(ch)
+    assert p.matches == [2] and p.chosen == 2  # search is case-insensitive
+    p.press(BACKSPACE); p.press(BACKSPACE); p.press(BACKSPACE); p.press(BACKSPACE)
+    p.press("j")                              # with no search text, j moves down like ↓
+    assert p.press(ENTER) == "pick" and p.chosen == 1
+    for ch in "zzz":
+        p.press(ch)
+    assert p.press(ENTER) is None             # nothing matches: Enter does nothing
+    assert p.press(ESC) == "cancel"
+
+
+def test_chat_info_for_the_resume_list(tmp_path):
+    from volt_code import sessions as s
+
+    chat = s.Session.new(tmp_path / "p", "Local")
+    chat.save(brain_with("one", "two", "three"))
+    assert s.latest(tmp_path / "p").message_count == 3
+    assert abs(s.latest(tmp_path / "p").created - chat.updated) < 5

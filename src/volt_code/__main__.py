@@ -165,31 +165,31 @@ BRAIN_CHOICE = {"Claude": "claude", "Online": "gemini", "Local": "local"}
 
 
 def _age(ts: float) -> str:
-    mins = int((time.time() - ts) / 60)
-    if mins < 60:
-        return f"{max(mins, 1)} min ago"
-    if mins < 60 * 24:
-        return f"{mins // 60} h ago"
+    secs = max(0, int(time.time() - ts))
+    if secs < 60:
+        return f"{secs}s ago"
+    if secs < 3600:
+        return f"{secs // 60}m ago"
+    if secs < 86400:
+        return f"{secs // 3600}h ago"
+    if secs < 86400 * 30:
+        return f"{secs // 86400}d ago"
     return time.strftime("%d %b", time.localtime(ts))
 
 
 def pick_chat(root: Path):
-    """Ask which saved chat from this folder to continue. None when there are none or none picked."""
-    chats = sessions.list_for(root)[:15]
+    """Claude Code-style resume list: arrow keys, type to search, Enter to resume."""
+    from volt_code.picker import choose
+
+    chats = sessions.list_for(root)[:200]
     if not chats:
         print(DIM("  No saved chats in this folder yet."))
         return None
-    print(BOLD("\n  Earlier chats in this folder"))
-    for n, chat in enumerate(chats, 1):
-        print(f"   {ACCENT(str(n).rjust(2))}  {chat.title[:60]}  {DIM(f'· {chat.brain} · {_age(chat.updated)}')}")
-    try:
-        answer = input("  Number to continue (Enter to cancel): ").strip()
-    except (EOFError, KeyboardInterrupt):
-        print()
-        return None
-    if answer.isdigit() and 1 <= int(answer) <= len(chats):
-        return chats[int(answer) - 1]
-    return None
+    rows = [f"{_age(c.updated):>11}  {_age(c.created):>11}  {c.message_count:>10}  {c.title[:70]}" for c in chats]
+    header = f"  {'Modified':>11}  {'Created':>11}  {'# Messages':>10}  Summary"
+    picked = choose(BOLD("\n  Resume a conversation"), header, rows,
+                    search=[c.title for c in chats], paint=paint)
+    return chats[picked] if picked is not None else None
 
 
 def main(argv=None) -> int:
@@ -241,11 +241,18 @@ def main(argv=None) -> int:
             print(RED("  ❌ That chat can't be continued with this brain."))
             return False
         state["session"] = chat
-        print(DIM(f"  ↩️  Continuing: {chat.title}  ({state['name']})"))
-        for who, text in chat.recap():
-            line = text.replace("\n", " ")
-            print(DIM(f"   {who}: ") + (line[:160] + ("…" if len(line) > 160 else "")))
-        print()
+        # Show the earlier conversation, like Claude Code does when it resumes.
+        print(DIM(f"\n  ↩️  Resumed: {chat.title}  ({state['name']})\n"))
+        history = chat.recap(limit=10_000)
+        if len(history) > 60:
+            print(DIM(f"  … {len(history) - 60} earlier messages …\n"))
+        for who, text in history[-60:]:
+            body = text if len(text) <= 1200 else text[:1200] + " …"
+            if who == "You":
+                print(ACCENT("› ") + body.replace("\n", "\n  "))
+            else:
+                print(ACCENT("⏺ ") + body.replace("\n", "\n  "))
+            print()
         return True
 
     if args.computer and not computer_on():

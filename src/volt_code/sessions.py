@@ -96,6 +96,17 @@ class Session:
         brain.messages = head + list(self.messages)
         return True
 
+    @property
+    def created(self) -> float:
+        try:
+            return time.mktime(time.strptime(self.id[:15], "%Y%m%d-%H%M%S"))
+        except ValueError:
+            return self.updated
+
+    @property
+    def message_count(self) -> int:
+        return len(self.recap(limit=10_000))
+
     def recap(self, limit: int = 3) -> list[tuple[str, str]]:
         """The last few (who, text) exchanges, for showing when a chat resumes."""
         lines = []
