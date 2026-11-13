@@ -75,8 +75,10 @@ Info 'Downloading the AI models (about 2.3 GB the first time)...'
 & $python -c "import json,os; p=os.path.expanduser('~/.config/jarvis/config.json'); os.makedirs(os.path.dirname(p),exist_ok=True); c=json.load(open(p)) if os.path.exists(p) else {}; c.setdefault('ollama_chat_model','$chatModel'); json.dump(c,open(p,'w'),indent=2)"
 
 # --- Files, Start menu, desktop, hotkey, volt command, Settings > Apps, start ------------
-# The updater does all of this and starts Volt AI.
-Invoke-Expression (Get-Content "$new\scripts\windows\update-volt.ps1" -Raw)
+# The updater does all of this and starts Volt AI ($env:VOLT_NO_START=1 skips the start).
+$updater = Get-Content "$new\scripts\windows\update-volt.ps1" -Raw
+if ($env:VOLT_NO_START) { $updater = $updater -replace '(?m)^Start-Process wscript.*$', '' }
+Invoke-Expression $updater
 Copy-Item "$root\Start Volt AI.vbs" ([Environment]::GetFolderPath('Startup')) -Force
 Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
 
