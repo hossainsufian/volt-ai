@@ -145,3 +145,18 @@ def test_removing_the_key_goes_back_to_local(web):
     client.post("/api/online/key", json={"key": "AIzaSyTESTKEY1234567890abcdef"}, environ_base=LOCAL)
     client.post("/api/online/key", json={"key": ""}, environ_base=LOCAL)
     assert srv.brain() == "fast" and volt_online.load() is None
+
+
+def test_busy_model_falls_back_to_the_next_one():
+    volt_online.save("AIzaSyTESTKEY1234567890abcdef", "gemini-3.8-flash")
+    tried = []
+
+    class Busy(FakeSSE):
+        def __init__(self): super().__init__([], status=503)
+
+    def post(url, json=None, headers=None, **kw):
+        tried.append(json["model"])
+        return Busy() if json["model"] == "gemini-3.8-flash" else FakeSSE(["Hi!"])
+
+    assert volt_online.reply([{"role": "user", "content": "hi"}], post=post) == "Hi!"
+    assert tried == ["gemini-3.8-flash", volt_online.BACKUP_MODELS[0]]

@@ -21,7 +21,10 @@ from desktop_app.volt_claude import Stopped, build_messages
 PROVIDER = "Gemini"
 BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai"
 KEY_PAGE = "https://aistudio.google.com/apikey"
-FALLBACK_MODEL = "gemini-2.5-flash"
+FALLBACK_MODEL = "gemini-3-flash-preview"
+# Tried in order when the chosen model is busy (503), at its limit (429), gone (404) or slow.
+BACKUP_MODELS = ("gemini-3-flash-preview", "gemini-flash-lite-latest", "gemini-3.5-flash", "gemini-3.7-flash")
+RETRY_STATUSES = (404, 429, 500, 503)
 SKIP_WORDS = ("lite", "image", "tts", "embed", "live", "audio", "vision", "exp", "learnlm", "aqa")
 
 SYSTEM_PROMPT = (
@@ -114,27 +117,54 @@ def reply(
     messages = [{"role": "system",
                  "content": SYSTEM_PROMPT.format(today=time.strftime("%A %d %B %Y")) + extra_system}]
     messages += build_messages(turns)
-    body = {"model": cfg.get("model") or FALLBACK_MODEL, "messages": messages, "stream": True}
     headers = {"Authorization": f"Bearer {cfg['key']}"}
-    written = ""
-    with post(f"{cfg.get('base_url') or BASE_URL}/chat/completions", json=body, headers=headers,
-              stream=True, timeout=(10, 300)) as resp:
-        resp.raise_for_status()
-        for raw in resp.iter_lines():
-            line = raw.decode() if isinstance(raw, bytes) else raw
-            if not line.startswith("data:"):
+    url = f"{cfg.get('base_url') or BASE_URL}/chat/completions"
+    chosen = cfg.get("model") or FALLBACK_MODEL
+    candidates = [chosen] + [m for m in BACKUP_MODELS if m != chosen]
+    last_error: Optional[Exception] = None
+    for model in candidates:
+        body = {"model": model, "messages": messages, "stream": True}
+        written = ""
+        try:
+            # Wait at most 60 s for each piece of the answer, so a stuck model fails fast.
+            with post(url, json=body, headers=headers, stream=True, timeout=(10, 60)) as resp:
+                if resp.status_code in RETRY_STATUSES:
+                    last_error = _status_error(resp)
+                    continue
+                resp.raise_for_status()
+                for raw in resp.iter_lines():
+                    line = raw.decode() if isinstance(raw, bytes) else raw
+                    if not line.startswith("data:"):
+                        continue
+                    data = line[5:].strip()
+                    if data == "[DONE]":
+                        break
+                    chunk = json.loads(data)
+                    for choice in chunk.get("choices") or []:
+                        written += (choice.get("delta") or {}).get("content") or ""
+                    if on_text is not None and written:
+                        on_text(written)
+                    if should_stop is not None and should_stop():
+                        raise Stopped(written)
+        except Stopped:
+            raise
+        except Exception as exc:
+            if written:
+                raise  # part of an answer already showed; don't start over silently
+            name = type(exc).__name__
+            if "Timeout" in name or "Connection" in name:
+                last_error = exc
                 continue
-            data = line[5:].strip()
-            if data == "[DONE]":
-                break
-            chunk = json.loads(data)
-            for choice in chunk.get("choices") or []:
-                written += (choice.get("delta") or {}).get("content") or ""
-            if on_text is not None and written:
-                on_text(written)
-            if should_stop is not None and should_stop():
-                raise Stopped(written)
-    return written.strip() or "No reply this time. Please try again."
+            raise
+        return written.strip() or "No reply this time. Please try again."
+    raise last_error or RuntimeError("no model answered")
+
+
+def _status_error(resp) -> Exception:
+    import requests
+
+    return requests.HTTPError(f"{resp.status_code}", response=resp)
+
 
 
 def friendly_error(exc: Exception) -> str:
