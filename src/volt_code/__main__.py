@@ -3,6 +3,8 @@
     volt                      chat about the project in the current folder
     volt "fix the tests"      do one task, then exit
     volt --brain local        use the free local model even when a Claude key is saved
+    volt -c                   continue the last chat in this folder
+    volt --resume             pick an earlier chat from this folder to continue
 
 It reads, searches, edits and creates files in the current folder and can run
 commands. Writing files and running commands always ask first.
@@ -17,6 +19,7 @@ import sys
 import time
 from pathlib import Path
 
+from volt_code import sessions
 from volt_code.agent import run_turn
 from volt_code.brains import BrainError, ClaudeBrain, LocalBrain, OnlineBrain
 from volt_code.tools import Toolbox
@@ -59,6 +62,7 @@ HELP = f"""
     /brain local   free model on this computer
     /brain gemini  fast online brain (needs your Gemini key)
     /brain claude  strongest for coding (needs your Claude key)
+    /resume        continue an earlier chat from this folder
     /exit          quit (or press Ctrl+D)
   Press Ctrl+C to stop Volt while it's working.
 """
@@ -141,44 +145,112 @@ def make_brain(choice: str, root: Path, model: str | None):
     return LocalBrain(model or local_model, url, system), f"{model or local_model} (free, on this computer)"
 
 
+BRAIN_CHOICE = {"Claude": "claude", "Online": "gemini", "Local": "local"}
+
+
+def _age(ts: float) -> str:
+    mins = int((time.time() - ts) / 60)
+    if mins < 60:
+        return f"{max(mins, 1)} min ago"
+    if mins < 60 * 24:
+        return f"{mins // 60} h ago"
+    return time.strftime("%d %b", time.localtime(ts))
+
+
+def pick_chat(root: Path):
+    """Ask which saved chat from this folder to continue. None when there are none or none picked."""
+    chats = sessions.list_for(root)[:15]
+    if not chats:
+        print(DIM("  No saved chats in this folder yet."))
+        return None
+    print(BOLD("\n  Earlier chats in this folder"))
+    for n, chat in enumerate(chats, 1):
+        print(f"   {ACCENT(str(n).rjust(2))}  {chat.title[:60]}  {DIM(f'· {chat.brain} · {_age(chat.updated)}')}")
+    try:
+        answer = input("  Number to continue (Enter to cancel): ").strip()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return None
+    if answer.isdigit() and 1 <= int(answer) <= len(chats):
+        return chats[int(answer) - 1]
+    return None
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog="volt", description="⚡ Volt Code: a coding assistant in your terminal.")
     parser.add_argument("task", nargs="*", help="do this one task, then exit")
     parser.add_argument("--brain", choices=("auto", "claude", "gemini", "local"), default="auto",
                         help="auto (default) uses Claude or Gemini when a key is saved, otherwise the local model")
     parser.add_argument("--model", help="model to use (for example claude-sonnet-5-5 or qwen2.5:3b)")
+    parser.add_argument("-c", "--continue", dest="cont", action="store_true",
+                        help="continue the last chat in this folder")
+    parser.add_argument("-r", "--resume", action="store_true", help="pick an earlier chat in this folder to continue")
     args = parser.parse_args(argv)
 
     root = Path.cwd().resolve()
     ui = TerminalUI()
     toolbox = Toolbox(root, approve=ui.approve)
-    try:
-        brain, brain_name = make_brain(args.brain, root, args.model)
-    except BrainError as exc:
-        print(RED(f"❌ {exc}"))
+    state = {}
+
+    def start(choice: str, model) -> bool:
+        try:
+            state["brain"], state["name"] = make_brain(choice, root, model)
+        except BrainError as exc:
+            print(RED(f"❌ {exc}"))
+            return False
+        state["session"] = sessions.Session.new(root, state["brain"].label)
+        return True
+
+    def resume(chat) -> bool:
+        if chat.brain != state["brain"].label and not start(BRAIN_CHOICE.get(chat.brain, "local"), None):
+            return False
+        if not chat.restore_into(state["brain"]):
+            print(RED("  ❌ That chat can't be continued with this brain."))
+            return False
+        state["session"] = chat
+        print(DIM(f"  ↩️  Continuing: {chat.title}  ({state['name']})"))
+        for who, text in chat.recap():
+            line = text.replace("\n", " ")
+            print(DIM(f"   {who}: ") + (line[:160] + ("…" if len(line) > 160 else "")))
+        print()
+        return True
+
+    if not start(args.brain, args.model):
         return 1
 
     def ask(text: str) -> None:
         try:
-            run_turn(brain, toolbox, text, ui)
+            run_turn(state["brain"], toolbox, text, ui)
         except KeyboardInterrupt:
             ui.end_text()
             print(ACCENT("\n  ⏹  Stopped."))
         except BrainError as exc:
             ui.end_text()
             print(RED(f"  ❌ {exc}"))
+        finally:
+            try:
+                state["session"].save(state["brain"])
+            except OSError:
+                pass  # saving is a convenience; never break the chat for it
+
+    if args.cont or args.resume:
+        chat = sessions.latest(root) if args.cont else pick_chat(root)
+        if chat is None and args.cont:
+            print(DIM("  No earlier chat in this folder, starting a new one."))
+        elif chat is not None and not resume(chat):
+            return 1
 
     if args.task:
         ask(" ".join(args.task))
         return 0
 
-    print(f"\n {ACCENT('⚡ Volt Code')}  {DIM('·')} {brain_name}")
+    print(f"\n {ACCENT('⚡ Volt Code')}  {DIM('·')} {state['name']}")
     print(DIM(f"   📁 {root}"))
-    print(DIM("   Type what you want to build or fix. /help for commands, Ctrl+D to quit.\n"))
+    print(DIM("   Type what you want to build or fix. /help for commands, /resume for earlier chats.\n"))
     try:
         import readline  # noqa: F401  arrow keys and history
 
-        history = Path.home() / ".local" / "state" / "volt-ai" / "volt-code-history"
+        history = sessions.sessions_dir().parent / "volt-code-history"
         history.parent.mkdir(parents=True, exist_ok=True)
         try:
             readline.read_history_file(history)
@@ -206,13 +278,15 @@ def main(argv=None) -> int:
         if text == "/help":
             print(HELP)
             continue
+        if text in ("/resume", "/chats"):
+            chat = pick_chat(root)
+            if chat is not None:
+                resume(chat)
+            continue
         if text == "/clear" or text.startswith("/brain"):
             choice = text.split()[1] if text.startswith("/brain") and len(text.split()) > 1 else args.brain
-            try:
-                brain, brain_name = make_brain(choice, root, args.model if choice == args.brain else None)
-                print(DIM(f"  ✨ New conversation · {brain_name}"))
-            except BrainError as exc:
-                print(RED(f"  ❌ {exc}"))
+            if start(choice, args.model if choice == args.brain else None):
+                print(DIM(f"  ✨ New conversation · {state['name']}"))
             continue
         ask(text)
 
