@@ -155,7 +155,28 @@ function messageNode(m) {
   bubble.querySelectorAll(".codeblock .copy").forEach((btn) => {
     btn.onclick = () => copyText(btn.closest(".codeblock").querySelector("code").textContent, btn);
   });
+  if (m.role === "assistant" && String(m.status || "").startsWith("pending")) {
+    // While a drawing is being written, show progress instead of raw SVG code.
+    bubble.querySelectorAll(".codeblock").forEach((block) => {
+      const lang = block.querySelector(".code-head span").textContent.toLowerCase();
+      const code = block.querySelector("code").textContent;
+      if (lang === "svg" || /^\s*<svg/i.test(code)) block.outerHTML = '<p class="wait">✏️ Drawing your picture…</p>';
+    });
+  }
   if (m.role === "assistant" && !String(m.status || "").startsWith("pending")) {
+    // SVG drawings (logos, diagrams) show as pictures, not code.
+    bubble.querySelectorAll(".codeblock").forEach((block) => {
+      const lang = block.querySelector(".code-head span").textContent.toLowerCase();
+      const code = block.querySelector("code").textContent;
+      if (!(lang === "svg" || /^\s*<svg/i.test(code))) return;
+      const src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(code);
+      const fig = document.createElement("div"); fig.className = "svg-art";
+      fig.innerHTML = `<img class="gen-image" alt="Drawing" src="${src}"><div class="msg-actions">
+        <a download="volt-drawing.svg" href="${src}"><button type="button">⬇ Download</button></a>
+        <button type="button" class="open-art">⤢ Open</button></div>`;
+      fig.querySelector(".open-art").onclick = () => openArtifact(code, "svg");
+      block.replaceWith(fig);
+    });
     bubble.querySelectorAll(".codeblock").forEach((block) => {
       const code = block.querySelector("code").textContent;
       const lang = block.querySelector(".code-head span").textContent.toLowerCase();

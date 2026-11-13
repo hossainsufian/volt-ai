@@ -258,3 +258,5 @@ select.chip.brain { appearance: none; -webkit-appearance: none; cursor: pointer;
 .prompt-used { margin-top: 6px; font-size: 12px; color: var(--ink-soft); }
 .prompt-used summary { cursor: pointer; }
 .prompt-used p { margin: 4px 0 0; }
+
+.svg-art img { background: #fff; border-radius: 12px; border: 1px solid var(--line); max-width: min(100%, 420px); display: block; }

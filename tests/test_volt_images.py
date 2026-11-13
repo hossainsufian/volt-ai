@@ -225,8 +225,18 @@ def test_free_limit_waits_and_retries(web, monkeypatch):
     assert done["status"] == "done" and done["image"]
 
 
-def test_diagram_style_asks_the_text_brain_for_an_svg(web):
+def test_without_a_strong_brain_logos_become_pictures_not_code(web):
     srv, client, chat_id, calls = web
+    client.post(f"/api/chats/{chat_id}/images", json={"prompt": "logo for Volt AI", "style": "vector_logo",
+                "enhance": False}, environ_base=LOCAL)
+    [done] = wait_images(srv, chat_id)
+    assert done["image"] and calls["get"] and "logo" in calls["get"][0]
+
+
+def test_diagram_style_asks_the_text_brain_for_an_svg(web, monkeypatch):
+    srv, client, chat_id, calls = web
+    monkeypatch.setattr(srv, "claude_active", lambda: True)
+    monkeypatch.setattr(srv, "brain", lambda: "fast")
     seen = []
 
     class Lines:

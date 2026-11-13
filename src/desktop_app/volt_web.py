@@ -381,7 +381,10 @@ class VoltWebServer:
         if self.store.get_chat(chat_id) is None:
             return {"error": "Chat not found."}, 404
         if style in volt_images.VECTOR_STYLES:
-            return self._send(chat_id, f"{volt_images.VECTOR_STYLES[style]}: {prompt}", vector=style)
+            if self.claude_active() or volt_online.load() is not None:
+                return self._send(chat_id, f"{volt_images.VECTOR_STYLES[style]}: {prompt}", vector=style)
+            # The small local model can't draw usable SVG: make a picture instead.
+            style = "logo" if style == "vector_logo" else "diagram_picture"
         style = style if style in volt_images.STYLES else "auto"
         shape = shape if shape in volt_images.SHAPES else "square"
         count = max(1, min(IMAGE_MAX_COUNT, int(count or 1)))

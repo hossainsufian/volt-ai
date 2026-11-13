@@ -45,6 +45,7 @@ STYLES = {
     "sketch": ("✏️ Pencil sketch", "detailed pencil sketch, hatching, white paper"),
     "logo": ("🔷 Logo (picture)", "minimal flat vector logo mark, simple bold shapes, centred, plain white background"),
     "icon": ("🏷 Sticker / icon", "cute sticker icon, bold outline, flat colours, white background"),
+    "diagram_picture": ("📐 Diagram (picture)", "clean labelled technical diagram, flat vector style, white background, clear lines"),
     "anatomy": ("🫀 Anatomy illustration", "scientific medical illustration, anatomically accurate, textbook style, clean white background"),
 }
 # Drawn by Volt's text brain as SVG, so labels and text come out right.
