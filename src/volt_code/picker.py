@@ -88,7 +88,8 @@ class Picker:
 
 
 def choose(title: str, header: str, rows: list[str], search: Optional[list[str]] = None,
-           paint: Callable[[str, str], str] = lambda code, text: text) -> Optional[int]:
+           paint: Callable[[str, str], str] = lambda code, text: text, action: str = "resume",
+           searchable: bool = True) -> Optional[int]:
     """Let the user pick one row; returns its index or None."""
     if not rows:
         return None
@@ -105,7 +106,7 @@ def choose(title: str, header: str, rows: list[str], search: Optional[list[str]]
     while True:
         if drawn:
             out.write(f"\x1b[{drawn}F\x1b[J")  # back to the top of the last drawing, clear below
-        lines = [paint("1", title), paint("2", header)]
+        lines = [paint("1", title)] + ([paint("2", header)] if header else [])
         matches = state.matches
         for i in matches[state.top:state.top + VISIBLE]:
             selected = matches[state.pos] == i if matches else False
@@ -113,12 +114,17 @@ def choose(title: str, header: str, rows: list[str], search: Optional[list[str]]
         if not matches:
             lines.append(paint("2", "  No chats match."))
         more = len(matches) - state.top - VISIBLE
-        footer = f"  ↑/↓ move · type to search{f' ({state.query})' if state.query else ''} · Enter resume · Esc cancel"
+        search_hint = f" · type to search{f' ({state.query})' if state.query else ''}" if searchable else ""
+        footer = f"  ↑/↓ move{search_hint} · Enter {action} · Esc cancel"
         lines.append(paint("2", footer + (f" · {more} more" if more > 0 else "")))
         out.write("\n".join(lines) + "\n")
         out.flush()
         drawn = len(lines)
-        result = state.press(read_key())
+        key = read_key()
+        if not searchable and len(key) == 1 and key.isdigit() and 1 <= int(key) <= len(rows):
+            state.pos = int(key) - 1  # number keys pick directly, like Claude Code's prompts
+            key = ENTER
+        result = state.press(key)
         if result == "cancel":
             out.write(f"\x1b[{drawn}F\x1b[J")
             return None

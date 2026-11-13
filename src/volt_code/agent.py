@@ -14,6 +14,7 @@ def run_turn(brain, toolbox: Toolbox, text: str, ui, max_steps: int = MAX_STEPS,
     stays valid for the next request."""
     brain.add_user(text)
     for _ in range(max_steps):
+        getattr(ui, "thinking", lambda: None)()  # e.g. show a "Thinking…" spinner
         calls = brain.step(ui.text_chunk)
         ui.end_text()
         if not calls:
