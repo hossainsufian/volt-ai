@@ -96,7 +96,10 @@ def test_edit_sends_the_picture_and_the_change():
 
 def test_improved_prompt_is_cleaned_and_falls_back():
     assert vi.clean_enhanced('"A red fox in fresh snow, golden light."\n\nHope this helps!', "fox") == \
-        "A red fox in fresh snow, golden light."
+        "fox. A red fox in fresh snow, golden light."
+    # The user's own words always lead, so the subject can't drift away.
+    assert vi.clean_enhanced("A humanoid girl in blue reading by a lamp, warm light", "cute robot reading a book") \
+        .startswith("cute robot reading a book. ")
     assert vi.clean_enhanced("", "fox") == "fox"
     assert vi.clean_enhanced("ok", "a fox in snow") == "a fox in snow"  # too short to be a real prompt
 
@@ -178,7 +181,7 @@ def test_variations_use_style_shape_and_different_seeds(web):
     seeds = {m["meta"]["seed"] for m in done}
     assert len(seeds) == 3
     assert all("anime" in u and "width=768" in u and "golden" in u for u in calls["get"])
-    assert done[0]["meta"]["final_prompt"].startswith("a fox, golden hour")
+    assert done[0]["meta"]["final_prompt"].startswith("a fox")
 
 
 def test_again_makes_a_new_version_of_the_same_picture(web):

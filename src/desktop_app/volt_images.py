@@ -61,7 +61,8 @@ SHAPES = {
 ENHANCE_PROMPT = (
     "You write prompts for an AI image generator. Rewrite the user's idea as ONE vivid, "
     "specific image description in English (40 to 80 words): the subject, setting, "
-    "composition, lighting, colours and mood. Keep everything the user asked for and add "
+    "composition, lighting, colours and mood. The main subject must stay exactly what the "
+    "user named (a robot stays a robot, a cat stays a cat). Keep everything they asked for and add "
     "nothing they didn't imply. Reply with the description only: no quotes, no title, no "
     "explanation."
 )
@@ -140,6 +141,9 @@ def clean_enhanced(text: str, original: str) -> str:
     first = re.sub(r"^(here(?:'s| is)[^:]*:|prompt:)\s*", "", first, flags=re.I).strip().strip('"“”')
     if len(first) < max(20, len(original)):
         return original
+    # Keep the user's own words first: small models drift ("robot" became "humanoid girl").
+    if not first.lower().startswith(original.strip().lower()):
+        first = f"{original.strip()}. {first}"
     return first[:700]
 
 
