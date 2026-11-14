@@ -474,14 +474,27 @@ def main(argv=None) -> int:
     def rc_start() -> None:
         from volt_code import remote
 
-        cfg = remote.load_config()
         try:
-            if cfg is None:
-                print(DIM("  ⎿  Share this session with the Volt app. Sign in once with your Volt phone password."))
-                url = input(f"     Volt address [{remote.DEFAULT_URL}]: ").strip() or remote.DEFAULT_URL
+            local = remote.local_link()
+            saved = remote.load_config()
+            if local and remote.reachable(local["url"], local["token"]):
+                cfg = local  # Volt runs on this computer: no questions needed
+            elif saved and remote.reachable(saved["url"], saved["token"]):
+                cfg = saved
+            else:
+                print(DIM("  ⎿  Volt isn't running on this computer. Start Volt AI here, or connect to the Volt"))
+                print(DIM("     on your server (for example its Tailscale address 100.x.x.x). Enter to cancel."))
+                url = None
+                while url is None:
+                    typed = input("     Server address: ").strip()
+                    if not typed:
+                        return
+                    url = remote.normalise_address(typed)
+                    if url is None:
+                        print(RED("     That isn't an address. It looks like 100.101.68.117 or 192.168.1.9."))
                 import getpass
 
-                token = remote.pair(url, getpass.getpass("     Phone password: "))
+                token = remote.pair(url, getpass.getpass("     Volt phone password for that server: "))
                 remote.save_config(url, token)
                 cfg = remote.load_config()
             link = remote.RemoteLink(cfg["url"], cfg["token"], f"Volt Code · {root.name}", str(root))

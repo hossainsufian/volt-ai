@@ -216,6 +216,24 @@ class VoltWebServer:
         attempt = self._hash_password(password, bytes.fromhex(stored["salt"]))
         return secrets.compare_digest(attempt, stored["hash"])
 
+    def write_local_link(self) -> None:
+        """Leave Volt Code on this computer a private key (0600) so /rc connects with no
+        questions, like Claude Code's remote control. Only this user account can read it."""
+        path = self.store.data_dir / "volt-code-link.json"
+        token = None
+        try:
+            old = json.loads(path.read_text()).get("token")
+            if old in self._devices:
+                token = old
+        except (OSError, ValueError):
+            pass
+        with self._lock:
+            if token is None:
+                token = secrets.token_urlsafe(32)
+                self._devices[token] = {"paired": time.time(), "agent": "Volt Code on this computer"}
+                self._save_json(self._devices_path, self._devices)
+            self._save_json(path, {"url": f"http://127.0.0.1:{self.port}", "token": token})
+
     def _token_ok(self, token: Optional[str]) -> bool:
         if not token:
             return False
@@ -1064,6 +1082,10 @@ class VoltWebServer:
                 continue
         if self._server is None:
             raise OSError("no free port for the Volt AI web chat")
+        try:
+            self.write_local_link()
+        except OSError as exc:
+            debug_log(f"volt code link not written: {exc}", "volt")
         self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
         self._thread.start()
         print(f"🌐 Volt AI chat server on {host}:{self.port}", flush=True)

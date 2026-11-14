@@ -96,3 +96,36 @@ def test_bad_input_is_refused(web):
     assert phone.post(f"/api/rc/sessions/{sid}/input", json={"approval": "a1", "answer": "maybe"},
                       environ_base=PHONE).status_code == 400
     assert phone.post("/api/rc/sessions/nope/input", json={"text": "hi"}, environ_base=PHONE).status_code == 404
+
+
+# --- /rc without questions when Volt runs on the same computer -----------------------
+
+def test_volt_leaves_a_private_key_for_volt_code_on_this_computer(tmp_path):
+    srv = VoltWebServer(VoltStore(tmp_path), Bridge(), port=8765)
+    srv.write_local_link()
+    info = __import__("json").loads((tmp_path / "volt-code-link.json").read_text())
+    assert info["url"] == "http://127.0.0.1:8765"
+    assert oct((tmp_path / "volt-code-link.json").stat().st_mode)[-3:] == "600"
+    client = srv.app.test_client()
+    client.set_cookie("volt_session", info["token"])
+    assert client.get("/api/rc/sessions", environ_base=LOCAL).status_code == 200
+    srv.write_local_link()  # a restart keeps the same key instead of piling up devices
+    assert __import__("json").loads((tmp_path / "volt-code-link.json").read_text())["token"] == info["token"]
+
+
+def test_volt_code_finds_the_local_volt(tmp_path, monkeypatch):
+    from volt_code import remote
+
+    monkeypatch.setenv("VOLT_DATA_DIR", str(tmp_path))
+    (tmp_path / "volt-code-link.json").write_text('{"url": "http://127.0.0.1:8765", "token": "abc"}')
+    assert remote.local_link() == {"url": "http://127.0.0.1:8765", "token": "abc"}
+
+
+def test_addresses_are_checked_so_a_password_cannot_slip_in():
+    from volt_code import remote
+
+    assert remote.normalise_address("100.101.68.117") == "http://100.101.68.117:8765"
+    assert remote.normalise_address("http://192.168.1.9:8765/") == "http://192.168.1.9:8765"
+    assert remote.normalise_address("my-pc.tail1234.ts.net") == "http://my-pc.tail1234.ts.net:8765"
+    for bad in ("@123sufian", "zen", "hello world", ""):
+        assert remote.normalise_address(bad) is None

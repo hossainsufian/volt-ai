@@ -13,6 +13,7 @@ import json
 import os
 import platform
 import queue
+import re
 import threading
 import time
 from pathlib import Path
@@ -47,6 +48,40 @@ def save_config(url: str, token: str) -> None:
     with os.fdopen(fd, "w") as fh:
         json.dump({"url": url.rstrip("/"), "token": token}, fh)
     tmp.replace(path)
+
+
+def local_link() -> Optional[dict]:
+    """The key Volt on this computer leaves for Volt Code (see VoltWebServer.write_local_link)."""
+    from desktop_app.volt_store import default_data_dir
+
+    try:
+        data = json.loads((default_data_dir() / "volt-code-link.json").read_text())
+        return data if data.get("url") and data.get("token") else None
+    except (OSError, ValueError):
+        return None
+
+
+def reachable(url: str, token: str, http=None) -> bool:
+    if http is None:
+        import requests
+
+        http = requests
+    try:
+        return http.get(f"{url}/api/state", cookies={COOKIE: token}, timeout=4).status_code == 200
+    except Exception:
+        return False
+
+
+ADDRESS = re.compile(r"^(?:https?://)?(localhost|\d{1,3}(?:\.\d{1,3}){3}|[a-z0-9-]+(?:\.[a-z0-9-]+)+)(?::(\d{2,5}))?/?$", re.I)
+
+
+def normalise_address(text: str) -> Optional[str]:
+    """'100.101.68.117' -> 'http://100.101.68.117:8765'; None when it isn't an address."""
+    m = ADDRESS.match((text or "").strip())
+    if not m:
+        return None
+    scheme = "https" if text.strip().lower().startswith("https://") else "http"
+    return f"{scheme}://{m.group(1)}:{m.group(2) or 8765}"
 
 
 def qr_text(url: str) -> str:
