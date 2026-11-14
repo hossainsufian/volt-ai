@@ -102,6 +102,10 @@ TOOLS = [
     },
 ]
 
+from volt_code import boards as _boards  # noqa: E402  (after TOOLS so the order reads naturally)
+
+TOOLS.append(_boards.TOOL)
+
 
 def _truncate(text: str) -> str:
     if len(text) <= MAX_OUTPUT_CHARS:
@@ -255,3 +259,20 @@ class Toolbox:
             raise ToolError(f"The command took longer than {COMMAND_TIMEOUT_SEC} seconds and was stopped.")
         output = (done.stdout + ("\n" + done.stderr if done.stderr else "")).strip()
         return _truncate(f"{output}\n(exit code {done.returncode})" if output else f"(no output, exit code {done.returncode})")
+
+    def _tool_flash_board(self, args: dict) -> str:
+        sketch = self._path(args.get("sketch"))
+        if sketch.is_file():
+            sketch = sketch.parent
+        if not any(sketch.glob("*.ino")):
+            raise ToolError(f"{self._rel(sketch)} has no .ino file. Put the sketch in a folder with the same name.")
+        try:
+            board = _boards.pick_board(_boards.find_boards(), self._text(args, "port", False).strip(),
+                                       self._text(args, "board", False).strip())
+        except _boards.BoardError as exc:
+            raise ToolError(str(exc))
+        if not self.approve("Flash the board", f"{self._rel(sketch)} → {board['port']} ({board['fqbn']})"):
+            raise ToolError("The user did not allow flashing.")
+        worked, output = _boards.flash(sketch, board["port"], board["fqbn"])
+        status = "Flashed successfully." if worked else "Flashing failed."
+        return _truncate(f"{status}\n{output}")

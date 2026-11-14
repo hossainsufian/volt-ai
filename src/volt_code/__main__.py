@@ -20,7 +20,7 @@ import time
 from pathlib import Path
 from typing import Optional
 
-from volt_code import features, sessions
+from volt_code import boards, features, sessions
 from volt_code.agent import run_turn
 from volt_code.brains import BrainError, ClaudeBrain, LocalBrain, OnlineBrain
 from volt_code.tools import Toolbox
@@ -61,7 +61,9 @@ How to work:
 - Read a file before editing it. Make focused changes with edit_file; use write_file for new files.
 - After changing code, run the project's tests or a quick check with run_command when that makes sense.
 - Keep replies short and plain: say what you did and anything the user needs to know.
-- If a request is unclear or risky (deleting data, force pushing), ask first instead of guessing."""
+- If a request is unclear or risky (deleting data, force pushing), ask first instead of guessing.
+- For ESP32/Arduino boards: put the code in a sketch folder (name/name.ino) and flash it with flash_board;
+  it finds the USB port itself. Use pin 2 for the LED on a normal ESP32 dev board."""
 
 HELP = f"""
   {BOLD('Volt Code commands')}
@@ -76,6 +78,7 @@ HELP = f"""
     /status            brain, folder, mode and memory
     /computer          let Volt see the screen and use mouse and keyboard (needs Claude)
     /rc                remote control: show this session in the Volt app (phone or desktop)
+    flash the blink code   put a ready LED-blink program on the plugged-in ESP32
     /exit              quit (or Ctrl+D)
   {BOLD('In your message')}
     @path/to/file      attach a file           !command    run a shell command yourself
@@ -226,7 +229,7 @@ class TerminalUI:
             if decided is False:
                 print(DIM(f"  ⎿  ⏸ Not done in plan mode: {title}"))
             return decided
-        kind = ("commands" if title.startswith("Run") else
+        kind = ("commands" if title.startswith("Run") else "flashing" if title.startswith("Flash") else
                 "screen control" if title.startswith("Control the screen") else "file changes")
         if kind in self.always:
             return True
@@ -377,6 +380,36 @@ def main(argv=None) -> int:
         return 1
     if not start(args.brain, args.model):
         return 1
+
+    def flash_blink() -> None:
+        """The built-in shortcut: the ready blink sketch onto the plugged-in board, no brain needed."""
+        print(GREEN("⏺ ") + BOLD("Flash(blink → ESP32)"))
+        try:
+            board = boards.pick_board(boards.find_boards())
+        except boards.BoardError as exc:
+            print(DIM("  ⎿  ") + str(exc))
+            ui.emit({"type": "status", "text": str(exc)})
+            return
+        if not ui.approve("Flash the board", f"Blink code → {board['port']} ({board['fqbn']})\n"
+                                             "The LED on the board will turn on and off every half second."):
+            print(DIM("  ⎿  Not flashed."))
+            return
+        print(DIM(f"  ⎿  Building and uploading to {board['port']}. The first time takes a few minutes…"))
+        ui.emit({"type": "status", "text": f"Flashing the blink code to {board['port']}…"})
+        worked, output = boards.flash(boards.blink_folder(), board["port"], board["fqbn"])
+        if worked:
+            message = "✅ Done. The LED on the board is blinking now (on and off every half second)."
+            print(GREEN("  ⎿  ") + message)
+            print(DIM("     No blinking? Press the EN (reset) button once. Some boards have no LED on pin 2."))
+        else:
+            lines = output.strip().splitlines()
+            message = "❌ Flashing failed. " + (lines[-1] if lines else "")
+            for line in lines[-8:]:
+                print(DIM("     " + line[:200]))
+            print(RED("  ⎿  " + message))
+        ui.emit({"type": "status", "text": message})
+        state["context"] += (f"I flashed Volt's blink sketch ({boards.blink_folder()}) to the ESP32 on "
+                             f"{board['port']}: {'it worked' if worked else 'it failed'}.\n")
 
     def ask(text: str) -> None:
         text, attached = features.expand_mentions(text, root)
@@ -568,6 +601,9 @@ def main(argv=None) -> int:
             return 0
         if text == "/help":
             print(HELP)
+            continue
+        if boards.wants_blink(text):
+            flash_blink()
             continue
         if text.startswith("!"):
             command = text[1:].strip()

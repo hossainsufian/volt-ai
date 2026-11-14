@@ -24,6 +24,7 @@ SHELL_TIMEOUT_SEC = 120
 LABELS = {
     "read_file": "Read", "write_file": "Write", "edit_file": "Update",
     "list_files": "List", "search": "Search", "run_command": "Bash",
+    "flash_board": "Flash",
 }
 
 MODES = ("default", "accept_edits", "plan")
@@ -122,7 +123,7 @@ def tool_label(call) -> str:
     if call.toolset:
         detail = args.get("text") or args.get("coordinate") or args.get("region") or ""
         return f"Computer({call.name}{' ' + str(detail) if detail else ''})"
-    detail = args.get("path") or args.get("pattern") or args.get("command") or ""
+    detail = args.get("path") or args.get("pattern") or args.get("command") or args.get("sketch") or ""
     return f"{LABELS.get(call.name, call.name)}({str(detail)[:100]})"
 
 
@@ -134,7 +135,7 @@ def next_mode(mode: str) -> str:
 
 def mode_decides(mode: str, title: str) -> Optional[bool]:
     """True/False when the mode settles an approval by itself; None to ask the user."""
-    is_command = title.startswith("Run")
+    is_command = title.startswith(("Run", "Flash"))
     is_screen = title.startswith("Control the screen")
     if mode == "plan":
         return False
