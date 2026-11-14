@@ -49,6 +49,13 @@ STATIC_DIR = Path(__file__).parent / "volt_web_static"
 COOKIE = "volt_session"
 IMAGE_RETRY_CAP_SEC = 60  # longest wait for the free image service before trying again
 IMAGE_MAX_COUNT = 4
+ATTACH_MAX_COUNT = 6
+ATTACH_MAX_BYTES = 10 * 1024 * 1024
+ATTACH_TEXT_CHARS = 100_000
+PICTURE_TYPES = {"image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp", "image/gif": ".gif"}
+TEXT_SUFFIXES = (".txt", ".md", ".py", ".js", ".ts", ".html", ".css", ".json", ".csv", ".xml", ".yaml",
+                 ".yml", ".toml", ".ini", ".log", ".sh", ".ps1", ".java", ".c", ".cpp", ".h", ".go", ".rs",
+                 ".php", ".rb", ".sql", ".kt", ".swift", ".tsx", ".jsx", ".svg")
 DEFAULT_PORT = 8765
 PAIR_MAX_FAILURES = 5
 PAIR_LOCKOUT_SEC = 300
@@ -279,13 +286,60 @@ class VoltWebServer:
         mode = self.settings.get("local_mode", "fast")
         return mode if mode in LOCAL_MODES else "fast"
 
+    def _read_attachments(self, items) -> tuple[Optional[dict], Optional[str]]:
+        """Check pasted pictures and files; returns (meta for the message, error)."""
+        import base64
+
+        if not items:
+            return None, None
+        if not isinstance(items, list) or len(items) > ATTACH_MAX_COUNT:
+            return None, f"Attach at most {ATTACH_MAX_COUNT} files at once."
+        pictures, files = [], []
+        for item in items:
+            name = str((item or {}).get("name") or "file")[:120]
+            kind = str(item.get("type") or "").lower()
+            try:
+                data = base64.b64decode(str(item.get("data") or ""), validate=False)
+            except ValueError:
+                return None, f"{name} couldn't be read."
+            if not data:
+                return None, f"{name} is empty."
+            if len(data) > ATTACH_MAX_BYTES:
+                return None, f"{name} is too big (the limit is {ATTACH_MAX_BYTES // (1024 * 1024)} MB)."
+            if kind in PICTURE_TYPES:
+                pictures.append({"image": self.store.save_image(data, PICTURE_TYPES[kind]), "mime": kind, "name": name})
+            elif kind.startswith("text/") or kind == "application/json" or name.lower().endswith(TEXT_SUFFIXES):
+                files.append({"name": name, "text": data.decode("utf-8", errors="replace")[:ATTACH_TEXT_CHARS]})
+            else:
+                return None, f"{name}: Volt can read pictures and text or code files."
+        meta = {}
+        if pictures:
+            meta["attachments"] = pictures
+        if files:
+            meta["files"] = files
+        return meta, None
+
     def _send(self, chat_id: str, text: str, artifact: bool = False,
-              vector: Optional[str] = None) -> tuple[dict, int]:
+              vector: Optional[str] = None, attachments=None) -> tuple[dict, int]:
         brain = self.brain()
+        meta, error = self._read_attachments(attachments)
+        if error:
+            return {"error": error}, 400
+        if meta and meta.get("attachments") and brain not in ("online", "claude"):
+            # Only Gemini and Claude can look at pictures.
+            if volt_online.load() is not None:
+                brain = "online"
+            elif volt_claude.load_key() is not None:
+                brain = "claude"
+            else:
+                return {"error": "To look at pictures, Volt needs Gemini (free key: Settings → Gemini brain) "
+                                 "or Claude. The brain on this computer can't see images."}, 400
+        if meta and brain == "smart":
+            brain = "fast"  # attached files go to a direct brain
         if (artifact or vector) and brain == "smart":
             brain = "fast"  # artifacts need the model's raw answer, not the assistant pipeline
         if brain in ("claude", "online", "fast"):
-            return self._send_streamed(chat_id, text, brain, artifact, vector)
+            return self._send_streamed(chat_id, text, brain, artifact, vector, meta)
         if not self.bridge.is_available():
             return {"error": "Volt AI is starting or stopped. Try again in a moment."}, 503
         if self.store.pending_message() is not None:
@@ -305,8 +359,8 @@ class VoltWebServer:
         debug_log(f"volt chat message submitted to chat {chat_id}", "volt")
         return {"user": user, "reply": self.store.get_message(pending["id"])}, 200
 
-    def _send_streamed(self, chat_id: str, text: str, brain: str,
-                       artifact: bool = False, vector: Optional[str] = None) -> tuple[dict, int]:
+    def _send_streamed(self, chat_id: str, text: str, brain: str, artifact: bool = False,
+                       vector: Optional[str] = None, meta: Optional[dict] = None) -> tuple[dict, int]:
         if self.store.pending_message() is not None:
             return {"error": "Volt AI is still answering. Wait for the reply first."}, 409
         if self.store.get_chat(chat_id) is None:
@@ -314,7 +368,7 @@ class VoltWebServer:
         with self._lock:
             # The local brain's memory no longer matches this chat; reload it next time.
             self._active_chat = None
-            user = self.store.add_message(chat_id, "user", text)
+            user = self.store.add_message(chat_id, "user", text, meta=meta)
             pending = self.store.add_message(chat_id, "assistant", "", status="pending")
         threading.Thread(
             target=self._stream_worker, args=(chat_id, pending["id"], brain, artifact, vector), daemon=True
@@ -341,7 +395,7 @@ class VoltWebServer:
                 current = self.store.get_message(message_id)
                 return not current or current["status"] != "pending"
 
-            turns = self.store.conversation_for_restore(chat_id)
+            turns = self.store.conversation_with_media(chat_id)
             extra, question = "", (turns[-1].get("content", "") if turns else "")
             cloud = brain in ("claude", "online")  # big models: give them the full readings
             if self.settings.get("system_analysis") and (cloud or volt_system.is_about_computer(question)):
@@ -568,6 +622,7 @@ class VoltWebServer:
         from flask import Flask, abort, jsonify, make_response, redirect, request, send_file
 
         app = Flask(__name__, static_folder=None)
+        app.config["MAX_CONTENT_LENGTH"] = 80 * 1024 * 1024  # several pasted pictures, base64-encoded
         server = self
 
         def current_token() -> Optional[str]:
@@ -869,9 +924,11 @@ class VoltWebServer:
             require_auth()
             data = request.get_json(silent=True) or {}
             text = str(data.get("text", "")).strip()
-            if not text:
+            attachments = data.get("attachments") or None
+            if not text and not attachments:
                 return jsonify(error="Type a message first."), 400
-            body, status = server._send(chat_id, text[:20000], artifact=bool(data.get("artifact")))
+            body, status = server._send(chat_id, text[:20000], artifact=bool(data.get("artifact")),
+                                        attachments=attachments)
             return jsonify(body), status
 
         @app.post("/api/chats/<chat_id>/images")

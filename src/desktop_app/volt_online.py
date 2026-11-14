@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from volt_brand import PROMPT_LINE
-from desktop_app.volt_claude import Stopped, build_messages
+from desktop_app.volt_claude import Stopped
 
 PROVIDER = "Gemini"
 BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai"
@@ -118,7 +118,7 @@ def reply(
         post = requests.post
     messages = [{"role": "system",
                  "content": SYSTEM_PROMPT.format(today=time.strftime("%A %d %B %Y")) + extra_system}]
-    messages += build_messages(turns)
+    messages += _chat_messages(turns)
     headers = {"Authorization": f"Bearer {cfg['key']}"}
     url = f"{cfg.get('base_url') or BASE_URL}/chat/completions"
     chosen = cfg.get("model") or FALLBACK_MODEL
@@ -167,6 +167,26 @@ def _status_error(resp) -> Exception:
 
     return requests.HTTPError(f"{resp.status_code}", response=resp)
 
+
+
+def _chat_messages(turns: list[dict]) -> list[dict]:
+    """Chat turns in OpenAI-compatible form; pictures become image_url parts."""
+    out: list[dict] = []
+    for turn in turns:
+        role, text = turn.get("role"), (turn.get("content") or "").strip()
+        pics = turn.get("images") if role == "user" else None
+        if role not in ("user", "assistant") or not (text or pics):
+            continue
+        if not out and role != "user":
+            continue  # the conversation must start with the user
+        if pics:
+            content = [{"type": "text", "text": text or "What's in this picture?"}]
+            content += [{"type": "image_url", "image_url": {"url": f"data:{p['mime']};base64,{p['b64']}"}}
+                        for p in pics]
+            out.append({"role": "user", "content": content})
+        else:
+            out.append({"role": role, "content": text})
+    return out
 
 
 def friendly_error(exc: Exception) -> str:

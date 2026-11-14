@@ -260,6 +260,34 @@ class VoltStore:
             if m["role"] in ("user", "assistant") and m["status"] == "done" and m["text"]
         ]
 
+    def conversation_with_media(self, chat_id: str, max_image_turns: int = 3) -> list[dict]:
+        """Turns for a brain, with attached files folded into the text and the pictures of
+        the last few picture messages as base64 (older pictures are left out to keep requests small)."""
+        import base64
+
+        msgs = [m for m in self.messages(chat_id)
+                if m["role"] in ("user", "assistant") and m["status"] == "done" and (m["text"] or m.get("meta"))]
+        picture_turns = [m["id"] for m in msgs if (m.get("meta") or {}).get("attachments")][-max_image_turns:]
+        turns = []
+        for m in msgs:
+            meta = m.get("meta") or {}
+            text = m["text"] or ""
+            for f in meta.get("files") or []:
+                text += f"\n\nAttached file {f['name']}:\n```\n{f['text']}\n```"
+            turn = {"role": m["role"], "content": text}
+            if m["id"] in picture_turns:
+                images = []
+                for a in meta.get("attachments") or []:
+                    path = self.image_path(a["image"])
+                    if path is not None:
+                        images.append({"mime": a.get("mime", "image/png"),
+                                       "b64": base64.b64encode(path.read_bytes()).decode()})
+                if images:
+                    turn["images"] = images
+            if turn["content"].strip() or turn.get("images"):
+                turns.append(turn)
+        return turns
+
     # --- Images ----------------------------------------------------------
 
     def list_images(self) -> list[dict]:

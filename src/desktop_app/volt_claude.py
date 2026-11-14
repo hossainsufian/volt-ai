@@ -65,16 +65,23 @@ def masked_key() -> Optional[str]:
     return key[:10] + "…" + key[-4:]
 
 
-def build_messages(turns: list[dict]) -> list[dict]:
-    """Turn stored chat turns into a Messages API conversation."""
+def build_messages(turns: list[dict], images: bool = False) -> list[dict]:
+    """Turn stored chat turns into a Messages API conversation (with pictures when ``images``)."""
     out: list[dict] = []
     for turn in turns:
         role, text = turn.get("role"), (turn.get("content") or "").strip()
-        if role not in ("user", "assistant") or not text:
+        pics = turn.get("images") if images and role == "user" else None
+        if role not in ("user", "assistant") or not (text or pics):
             continue
         if not out and role != "user":
             continue  # the conversation must start with the user
-        out.append({"role": role, "content": text})
+        if pics:
+            content = [{"type": "image", "source": {"type": "base64", "media_type": p["mime"], "data": p["b64"]}}
+                       for p in pics]
+            content.append({"type": "text", "text": text or "What's in this picture?"})
+            out.append({"role": role, "content": content})
+        else:
+            out.append({"role": role, "content": text})
     return out
 
 
@@ -124,7 +131,7 @@ def reply(turns: list[dict], model: str, api_key: str, client=None,
         model=model,
         max_tokens=64000,
         system=SYSTEM_PROMPT + extra_system,
-        messages=build_messages(turns),
+        messages=build_messages(turns, images=True),
         thinking={"type": "adaptive"},
         output_config={"effort": "high"},
         # If a safety filter declines, let Anthropic retry on a suitable model.

@@ -62,8 +62,12 @@
             </select>
             <label class="img-enhance"><input type="checkbox" id="imgEnhance" checked> ✨ Improve my prompt</label>
           </div>
+          <div class="attach-list" id="attachList" hidden></div>
           <textarea id="input" rows="1" placeholder="Message Volt AI…" aria-label="Message Volt AI"></textarea>
           <div class="composer-row">
+            <button type="button" class="chip attach-btn" id="attachBtn" title="Attach pictures or files (or paste / drop them)" aria-label="Attach">📎</button>
+            <input type="file" id="attachInput" multiple hidden
+                   accept="image/png,image/jpeg,image/webp,image/gif,.txt,.md,.py,.js,.ts,.html,.css,.json,.csv,.xml,.yaml,.yml,.toml,.log,.sh,.ps1,.java,.c,.cpp,.h,.go,.rs,.php,.rb,.sql,.kt,.swift,.tsx,.jsx,.svg">
             <button type="button" class="chip" id="imageMode" aria-pressed="false" title="Create an image">🎨 Image</button>
             <button type="button" class="chip" id="artifactMode" aria-pressed="false" title="Build a web page, app, game or chart you can open and use">🧩 Artifact</button>
             <select class="chip brain" id="brainSel" aria-label="Which brain answers" title="Which brain answers">

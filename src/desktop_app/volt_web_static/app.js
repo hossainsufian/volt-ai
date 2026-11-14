@@ -16,6 +16,7 @@ const els = {
 };
 let state = { chats: [], current: null, messages: [], available: false, settings: {}, local: false, claude: {} };
 let pollTimer = null;
+let pendingFiles = [];  // attached pictures/files waiting to be sent: {name, type, data (base64), preview}
 
 async function api(path, options = {}) {
   const opts = { credentials: "same-origin", headers: {}, ...options };
@@ -151,6 +152,20 @@ function messageNode(m) {
     actions.appendChild(copy); bubble.appendChild(actions);
   } else {
     bubble.textContent = m.text;
+    const meta = m.meta || {};
+    if ((meta.attachments || []).length || (meta.files || []).length) {
+      const box = document.createElement("div"); box.className = "msg-attach";
+      for (const a of meta.attachments || []) {
+        const img = document.createElement("img"); img.src = `/images/${encodeURIComponent(a.image)}`; img.alt = a.name;
+        img.onclick = () => window.open(img.src, "_blank", "noopener");
+        box.appendChild(img);
+      }
+      for (const f of meta.files || []) {
+        const chip = document.createElement("span"); chip.className = "file-chip"; chip.textContent = "📄 " + f.name;
+        box.appendChild(chip);
+      }
+      bubble.appendChild(box);
+    }
   }
   bubble.querySelectorAll(".codeblock .copy").forEach((btn) => {
     btn.onclick = () => copyText(btn.closest(".codeblock").querySelector("code").textContent, btn);
@@ -216,7 +231,7 @@ function updateComposer() {
   const pending = state.messages.some((m) => m.status === "pending");
   els.stop.hidden = !pending;
   els.send.hidden = pending;
-  els.send.disabled = !els.input.value.trim();
+  els.send.disabled = !els.input.value.trim() && !pendingFiles.length;
   const brain = state.brain || "fast";
   const claude = brain === "claude";
   const sel = $("brainSel");
@@ -272,7 +287,7 @@ async function deleteChat(chat) {
 async function submit(e) {
   if (e) e.preventDefault();
   const text = els.input.value.trim();
-  if (!text || busy()) return;
+  if ((!text && !pendingFiles.length) || busy()) return;
   const imageMode = els.imageMode.getAttribute("aria-pressed") === "true";
   try {
     const chat = await ensureChat();
@@ -283,13 +298,73 @@ async function submit(e) {
         count: Number($("imgCount").value) || 1, enhance: $("imgEnhance").checked } });
       setImageMode(false);
     } else {
-      await api(`/api/chats/${chat.id}/messages`, { method: "POST", body: { text, artifact: artifactOn() } });
+      const attachments = pendingFiles.map(({ name, type, data }) => ({ name, type, data }));
+      await api(`/api/chats/${chat.id}/messages`, { method: "POST", body: { text, artifact: artifactOn(), attachments } });
+      pendingFiles = []; renderAttachments();
     }
     await openChat(chat.id); loadChats();
   } catch (err) {
     els.input.value = text; autosize(); toast(err.message);
   }
 }
+// --- Attachments: 📎, paste and drag and drop ----------------------------------------------
+const MAX_SIDE = 1568;  // big photos are shrunk here so uploads stay quick
+function readAsDataURL(blob) {
+  return new Promise((ok, bad) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = bad; r.readAsDataURL(blob); });
+}
+async function shrinkPicture(file) {
+  const url = await readAsDataURL(file);
+  if (file.type === "image/gif") return { type: file.type, url };
+  const img = await new Promise((ok, bad) => { const i = new Image(); i.onload = () => ok(i); i.onerror = bad; i.src = url; });
+  const scale = Math.min(1, MAX_SIDE / Math.max(img.width, img.height));
+  if (scale === 1 && file.size < 1.5e6) return { type: file.type, url };
+  const c = document.createElement("canvas");
+  c.width = Math.round(img.width * scale); c.height = Math.round(img.height * scale);
+  c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+  return { type: "image/jpeg", url: c.toDataURL("image/jpeg", 0.88) };
+}
+async function addFiles(list) {
+  for (const file of list) {
+    if (pendingFiles.length >= 6) { toast("You can attach up to 6 files at once."); break; }
+    try {
+      if (file.type.startsWith("image/")) {
+        const { type, url } = await shrinkPicture(file);
+        pendingFiles.push({ name: file.name || "pasted-picture.png", type, data: url.split(",")[1], preview: url });
+      } else {
+        if (file.size > 2e6) { toast(`${file.name} is too big to read.`); continue; }
+        const url = await readAsDataURL(file);
+        pendingFiles.push({ name: file.name, type: file.type || "text/plain", data: url.split(",")[1] });
+      }
+    } catch (_) { toast(`Couldn't read ${file.name}.`); }
+  }
+  renderAttachments();
+}
+function renderAttachments() {
+  const box = $("attachList"); box.innerHTML = ""; box.hidden = !pendingFiles.length;
+  pendingFiles.forEach((f, i) => {
+    const item = document.createElement("div"); item.className = "attach-item";
+    item.innerHTML = f.preview ? `<img alt="">` : `<span class="file-chip"></span>`;
+    if (f.preview) item.querySelector("img").src = f.preview; else item.querySelector(".file-chip").textContent = "📄 " + f.name;
+    const x = document.createElement("button"); x.type = "button"; x.className = "attach-x"; x.textContent = "✕";
+    x.setAttribute("aria-label", "Remove " + f.name);
+    x.onclick = () => { pendingFiles.splice(i, 1); renderAttachments(); };
+    item.appendChild(x); box.appendChild(item);
+  });
+  updateComposer();
+}
+$("attachBtn").onclick = () => $("attachInput").click();
+$("attachInput").onchange = (e) => { addFiles([...e.target.files]); e.target.value = ""; };
+els.input.addEventListener("paste", (e) => {
+  const files = [...(e.clipboardData?.files || [])];
+  if (files.length) { e.preventDefault(); addFiles(files); }
+});
+els.form.addEventListener("dragover", (e) => { e.preventDefault(); els.form.classList.add("dropping"); });
+els.form.addEventListener("dragleave", () => els.form.classList.remove("dropping"));
+els.form.addEventListener("drop", (e) => {
+  e.preventDefault(); els.form.classList.remove("dropping");
+  if (e.dataTransfer?.files?.length) addFiles([...e.dataTransfer.files]);
+});
+
 async function stop() { await api("/api/stop", { method: "POST" }); if (state.current) openChat(state.current.id); }
 function schedulePoll() {
   clearTimeout(pollTimer);
