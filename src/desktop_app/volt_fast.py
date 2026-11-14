@@ -16,6 +16,7 @@ import time
 from pathlib import Path
 from typing import Callable, Optional
 
+from volt_brand import PROMPT_LINE
 from desktop_app.volt_claude import Stopped, build_messages
 
 DEFAULT_MODEL = "qwen2.5:3b"
@@ -31,7 +32,8 @@ SYSTEM_PROMPT = (
     "When asked for code, give complete working code in fenced code blocks. "
     "Be honest when you don't know something. You can't browse the web in this "
     "mode. Today is {today}."
-)
+
+) + PROMPT_LINE
 
 
 ARTIFACT_PROMPT = (

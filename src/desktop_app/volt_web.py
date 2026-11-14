@@ -41,6 +41,7 @@ from typing import Callable, Optional, Protocol
 
 from jarvis.debug import debug_log
 
+import volt_brand
 from desktop_app import volt_claude, volt_fast, volt_images, volt_online, volt_rc, volt_system
 from desktop_app.volt_store import VoltStore
 
@@ -652,6 +653,7 @@ class VoltWebServer:
                     "installed": volt_fast.installed_models() if is_local() else [],
                     "default": volt_fast.model_and_url()[0],
                 },
+                about={"text": volt_brand.ABOUT, "based_on": volt_brand.BASED_ON},
                 images={
                     "has_key": volt_images.load_key() is not None,
                     "key_hint": volt_images.masked_key() if is_local() else None,

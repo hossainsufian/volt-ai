@@ -455,6 +455,7 @@ async function refreshState() {
   state.online = s.online || {};
   renderOnline(s);
   renderImageOptions(s);
+  if (s.about) { $("aboutText").textContent = s.about.text; $("aboutBased").textContent = s.about.based_on; }
   renderFastModel(s);
   state.brain = s.brain || "fast";
   renderClaude(s);

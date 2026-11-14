@@ -80,4 +80,6 @@ def build_system_prompt(assistant_name: str = "Volt AI") -> str:
     "Volt AI" when no config is available (tests, eval harnesses).
     """
     name = (assistant_name or "Volt AI").strip() or "Volt AI"
-    return _SYSTEM_PROMPT_TEMPLATE.format(name=name)
+    from volt_brand import PROMPT_LINE
+
+    return _SYSTEM_PROMPT_TEMPLATE.format(name=name) + PROMPT_LINE

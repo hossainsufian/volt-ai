@@ -1,6 +1,6 @@
 # Volt AI
 
-**Volt AI** is a private, local-first AI assistant with text chat and voice, made by Sufian Hossain.
+**Volt AI** is a private, local-first AI assistant with text chat and voice. Volt AI is owned by **Volt & Victor** and made by **Sufian Hossain**. Volt & Victor is owned by Sufian Hossain.
 It is a modified version of [Jarvis by Baris Sencan](https://github.com/isair/jarvis), shared free under the same non-commercial license (see [LICENSE](LICENSE)).
 
 ## Install Volt AI

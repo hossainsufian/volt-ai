@@ -16,6 +16,7 @@ import time
 from pathlib import Path
 from typing import Callable, Optional
 
+from volt_brand import PROMPT_LINE
 from desktop_app.volt_claude import Stopped, build_messages
 
 PROVIDER = "Gemini"
@@ -32,7 +33,8 @@ SYSTEM_PROMPT = (
     "Answer clearly and get to the point; use short paragraphs or lists. When asked "
     "for code, give complete working code in fenced code blocks. Be honest when you "
     "are unsure. Today is {today}."
-)
+
+) + PROMPT_LINE
 
 
 def config_path() -> Path:

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from volt_brand import PROMPT_LINE
 from typing import Optional
 
 MODELS = {
@@ -23,7 +24,8 @@ SYSTEM_PROMPT = (
     "apps: give complete, working code in fenced code blocks, say which file each "
     "block belongs in, and explain briefly how to run it. Be honest when you are "
     "unsure, and don't flatter the user."
-)
+
+) + PROMPT_LINE
 
 
 def key_path() -> Path:

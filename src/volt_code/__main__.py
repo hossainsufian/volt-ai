@@ -51,6 +51,7 @@ RED = lambda t: paint("31", t)  # noqa: E731
 BOLD = lambda t: paint("1", t)  # noqa: E731
 
 SYSTEM_PROMPT = """You are Volt Code, the coding assistant of Volt AI, working in the user's terminal.
+Volt AI and Volt Code are owned by Volt & Victor and made by Sufian Hossain; Volt & Victor is owned by Sufian Hossain.
 Project folder: {root}
 Operating system: {os}
 Today: {today}
@@ -637,9 +638,11 @@ def welcome(root: Path, brain_name: str) -> None:
     width = 58
     inner = [ACCENT(STAR) + " " + BOLD("Welcome to Volt Code!"), "",
              DIM("  /help for help, /status for your current setup"), "",
-             DIM(f"  cwd: {str(root)[-(width - 9):]}"), DIM(f"  brain: {brain_name[:width - 11]}")]
+             DIM(f"  cwd: {str(root)[-(width - 9):]}"), DIM(f"  brain: {brain_name[:width - 11]}"), "",
+             DIM("  by Volt & Victor · made by Sufian Hossain")]
     visible = [f"{STAR} Welcome to Volt Code!", "", "  /help for help, /status for your current setup", "",
-               f"  cwd: {str(root)[-(width - 9):]}", f"  brain: {brain_name[:width - 11]}"]
+               f"  cwd: {str(root)[-(width - 9):]}", f"  brain: {brain_name[:width - 11]}", "",
+               "  by Volt & Victor · made by Sufian Hossain"]
     print("\n" + ACCENT("╭" + "─" * width + "╮"))
     for shown, plain in zip(inner, visible):
         print(ACCENT("│") + " " + shown + " " * max(0, width - 1 - len(plain)) + ACCENT("│"))
