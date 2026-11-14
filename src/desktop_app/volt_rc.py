@@ -9,6 +9,7 @@ when Volt restarts or the terminal says goodbye.
 
 from __future__ import annotations
 
+import re
 import secrets
 import threading
 import time
@@ -23,10 +24,17 @@ class RemoteSessions:
         self._cond = threading.Condition()
         self._sessions: dict[str, dict] = {}
 
-    def create(self, title: str, folder: str, host: str) -> str:
-        sid = secrets.token_hex(8)
+    def create(self, title: str, folder: str, host: str, want_id: str = "") -> str:
+        """A new session; ``want_id`` brings back a session Volt forgot when it restarted."""
         now = time.time()
         with self._cond:
+            if want_id in self._sessions:  # already shared again (both loops noticed)
+                self._sessions[want_id]["seen"] = now
+                return want_id
+            if re.fullmatch(r"[0-9a-f]{16}", want_id or ""):
+                sid = want_id
+            else:
+                sid = secrets.token_hex(8)
             if len(self._sessions) >= MAX_SESSIONS:  # forget the oldest
                 oldest = min(self._sessions, key=lambda k: self._sessions[k]["seen"])
                 del self._sessions[oldest]

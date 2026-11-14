@@ -129,3 +129,43 @@ def test_addresses_are_checked_so_a_password_cannot_slip_in():
     assert remote.normalise_address("my-pc.tail1234.ts.net") == "http://my-pc.tail1234.ts.net:8765"
     for bad in ("@123sufian", "zen", "hello world", ""):
         assert remote.normalise_address(bad) is None
+
+
+def test_a_session_comes_back_with_the_same_link_after_volt_restarts(tmp_path):
+    from volt_code.remote import RemoteLink
+
+    srv = VoltWebServer(VoltStore(tmp_path), Bridge(), port=0)
+    srv.write_local_link()
+    token = __import__("json").loads((tmp_path / "volt-code-link.json").read_text())["token"]
+
+    class Http:  # requests.Session look-alike over the Flask test client
+        def __init__(self):
+            self.client = srv.app.test_client()
+            self.cookies = self
+
+        def set(self, name, value):
+            self.client.set_cookie(name, value)
+
+        def _wrap(self, resp):
+            return __import__("types").SimpleNamespace(status_code=resp.status_code, json=resp.get_json)
+
+        def post(self, url, json=None, timeout=None):
+            return self._wrap(self.client.post(url.split("8765", 1)[-1] or url, json=json, environ_base=LOCAL))
+
+        def get(self, url, params=None, timeout=None):
+            return self._wrap(self.client.get(url.split("8765", 1)[-1], query_string=params, environ_base=LOCAL))
+
+        def delete(self, url, timeout=None):
+            return self._wrap(self.client.delete(url.split("8765", 1)[-1], environ_base=LOCAL))
+
+    link = RemoteLink("http://127.0.0.1:8765", token, "quiz", "/home/me/quiz", http=Http())
+    sid = link.id
+    srv.rc = RemoteSessions()  # Volt restarts and forgets everything
+    link.emit({"type": "text", "text": "still here"})
+    for _ in range(100):
+        if srv.rc.exists(sid):
+            break
+        time.sleep(0.05)
+    assert srv.rc.exists(sid) and len(srv.rc.list()) == 1
+    assert link.id == sid
+    link._stop.set()

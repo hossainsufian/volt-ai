@@ -1049,7 +1049,8 @@ class VoltWebServer:
         def rc_create():
             require_auth()
             data = request.get_json(silent=True) or {}
-            sid = server.rc.create(str(data.get("title", "")), str(data.get("folder", "")), str(data.get("host", "")))
+            sid = server.rc.create(str(data.get("title", "")), str(data.get("folder", "")), str(data.get("host", "")),
+                                  want_id=str(data.get("id", "")))
             debug_log("volt code session shared with the app", "volt")
             return jsonify(id=sid)
 

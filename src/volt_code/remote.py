@@ -129,9 +129,20 @@ class RemoteLink:
             http = requests.Session()
         self.http, self.url = http, url.rstrip("/")
         self.http.cookies.set(COOKIE, token)
+        self._about = {"title": title, "folder": folder, "host": platform.node()}
+        self.id = ""
+        self._register()
+        self.open_url = self._app_link()
+        self.inbox: "queue.Queue[dict]" = queue.Queue()
+        self._out: "queue.Queue[dict]" = queue.Queue()
+        self._stop = threading.Event()
+        threading.Thread(target=self._send_loop, daemon=True).start()
+        threading.Thread(target=self._poll_loop, daemon=True).start()
+
+    def _register(self) -> None:
+        """Share this session with Volt (again, with the same id, after Volt restarts)."""
         try:
-            resp = self.http.post(f"{self.url}/api/rc/sessions", timeout=15, json={
-                "title": title, "folder": folder, "host": platform.node()})
+            resp = self.http.post(f"{self.url}/api/rc/sessions", timeout=15, json={**self._about, "id": self.id})
         except Exception as exc:
             raise RemoteError(f"Can't reach Volt at {self.url}. Is it running?") from exc
         if resp.status_code == 401:
@@ -139,12 +150,17 @@ class RemoteLink:
         if resp.status_code != 200:
             raise RemoteError(f"Volt said no ({resp.status_code}).")
         self.id = resp.json()["id"]
-        self.open_url = self._app_link()
-        self.inbox: "queue.Queue[dict]" = queue.Queue()
-        self._out: "queue.Queue[dict]" = queue.Queue()
-        self._stop = threading.Event()
-        threading.Thread(target=self._send_loop, daemon=True).start()
-        threading.Thread(target=self._poll_loop, daemon=True).start()
+
+    def _reconnect(self) -> None:
+        old = self.id
+        try:
+            self._register()
+        except RemoteError:
+            time.sleep(3)
+            return
+        if self.id != old:
+            self.open_url = self._app_link()
+        self.emit({"type": "status", "text": "Volt restarted; this session is shared again."})
 
     def _app_link(self) -> str:
         """Address that opens this session in the Volt app: Tailscale (anywhere),
@@ -171,8 +187,10 @@ class RemoteLink:
                 pass
             if batch:
                 try:
-                    self.http.post(f"{self.url}/api/rc/sessions/{self.id}/events",
-                                   json={"events": batch}, timeout=15)
+                    resp = self.http.post(f"{self.url}/api/rc/sessions/{self.id}/events",
+                                          json={"events": batch}, timeout=15)
+                    if resp.status_code == 404:  # Volt restarted and forgot this session
+                        self._reconnect()
                 except Exception:
                     time.sleep(1)  # Volt is restarting or offline; drop this batch
 
@@ -184,6 +202,8 @@ class RemoteLink:
                 if resp.status_code == 200:
                     for item in resp.json().get("inbox", []):
                         self.inbox.put(item)
+                elif resp.status_code == 404:  # Volt restarted and forgot this session
+                    self._reconnect()
                 else:
                     time.sleep(3)
             except Exception:
