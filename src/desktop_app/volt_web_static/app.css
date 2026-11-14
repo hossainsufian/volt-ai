@@ -282,3 +282,11 @@ select.chip.brain { appearance: none; -webkit-appearance: none; cursor: pointer;
 .rc-done { margin: 4px 0 0; color: var(--ink-soft); }
 .rc-composer { display: flex; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--line); background: var(--surface); }
 .rc-composer textarea { flex: 1; resize: none; font: inherit; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg, #fff); color: var(--ink); }
+
+/* Live Volt Code sessions in the sidebar */
+.code-live { padding: 0 8px 6px; }
+.code-item { display: flex; align-items: center; gap: 8px; width: 100%; }
+.code-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.code-item .live-dot { width: 8px; height: 8px; border-radius: 50%; background: #2fb15a; box-shadow: 0 0 0 3px rgba(47,177,90,.2); flex: 0 0 8px; }
+
+.image-opts[hidden] { display: none; }

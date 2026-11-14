@@ -42,6 +42,7 @@ mlx-whisper>=0.4.0; sys_platform == "darwin" and platform_machine == "arm64"
 PyQt6>=6.6.0
 PyQt6-WebEngine>=6.6.0
 psutil>=5.9.0
+segno>=1.6  # QR codes (Volt Code /rc link)
 # Note: 6.13.0+ has VC runtime pre-loading fix for Windows
 pyinstaller>=6.13.0
 anthropic>=2.6.0

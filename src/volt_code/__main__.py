@@ -519,8 +519,13 @@ def main(argv=None) -> int:
 
         atexit.register(lambda: ui.link.close() if ui.link is not None else None)
         link.emit({"type": "status", "text": f"Connected: {state['name']} in {root}"})
-        print(ACCENT("  📱 Remote control is ON.") + DIM(" Open the Volt app → 💻 Volt Code to watch and reply."))
-        print(DIM("     Type here as usual too. /rc again turns it off."))
+        print(ACCENT("  📱 Remote control is ON.") + " This session is now in the Volt app.")
+        print("     Open it: " + BOLD(link.open_url))
+        qr = remote.qr_text(link.open_url)
+        if qr:
+            print(DIM("     Or scan with your phone:"))
+            print("\n".join("     " + line for line in qr.rstrip("\n").splitlines()))
+        print(DIM("     It also shows in the app's sidebar under 💻 Volt Code. Type here as usual too; /rc again turns it off."))
 
     def rc_stop() -> None:
         ui.link.close()

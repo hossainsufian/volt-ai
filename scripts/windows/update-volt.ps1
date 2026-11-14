@@ -47,7 +47,7 @@ Copy-Item "$win\run.cmd", "$win\Start Volt AI.vbs", "$win\update-volt.ps1", "$wi
 
 # Add new Python packages if any were added (quick when nothing changed).
 $uv = Join-Path $env:USERPROFILE '.local\bin\uv.exe'
-if (Test-Path $uv) { & $uv pip install --quiet --python $python 'anthropic>=2.6.0' 'psutil>=5.9.0' }
+if (Test-Path $uv) { & $uv pip install --quiet --python $python 'anthropic>=2.6.0' 'psutil>=5.9.0' 'segno>=1.6' }
 
 # Keep the chat window from popping up every time Windows starts.
 & $python -c "import json,os; p=os.path.expanduser('~/.config/jarvis/config.json'); c=json.load(open(p)) if os.path.exists(p) else {}; c['open_chat_on_start']=False; os.makedirs(os.path.dirname(p),exist_ok=True); json.dump(c,open(p,'w'),indent=2)"

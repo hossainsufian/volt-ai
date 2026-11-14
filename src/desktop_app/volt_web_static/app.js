@@ -631,7 +631,10 @@ function openSession(s) {
   $("rcLog").innerHTML = ""; $("rcView").hidden = false;
   pollSession();
 }
-function closeSession() { clearTimeout(rc.timer); rc.id = null; $("rcView").hidden = true; }
+function closeSession() {
+  clearTimeout(rc.timer); rc.id = null; $("rcView").hidden = true;
+  if (location.hash.includes("code=")) history.replaceState(null, "", location.pathname);
+}
 function rcLine(cls, html) {
   const el = document.createElement("div"); el.className = "rc-line " + cls; el.innerHTML = html;
   $("rcLog").appendChild(el); return el;
@@ -680,6 +683,37 @@ async function pollSession() {
   rc.timer = setTimeout(pollSession, 1000);
 }
 $("openCode").onclick = () => openCodeSheet().catch((e) => toast(e.message));
+
+// Live Volt Code sessions in the sidebar, like Claude's remote-control sessions.
+const seenSessions = new Set();
+let firstSessionCheck = true;
+async function refreshCodeSessions() {
+  let sessions = [];
+  try { ({ sessions } = await api("/api/rc/sessions")); } catch (_) { return; }
+  const live = sessions.filter((s) => s.online);
+  const box = $("codeLive"); box.innerHTML = ""; box.hidden = !live.length;
+  if (live.length) box.insertAdjacentHTML("beforeend", '<div class="chat-group">💻 Volt Code · live</div>');
+  for (const s of live) {
+    const b = document.createElement("button"); b.type = "button"; b.className = "chat-item code-item";
+    b.innerHTML = '<span class="live-dot" aria-hidden="true"></span><span class="code-name"></span>';
+    b.querySelector(".code-name").textContent = s.title.replace(/^Volt Code · /, "");
+    b.title = `${s.host} · ${s.folder}`;
+    b.onclick = () => { closeMenu(); openSession(s); };
+    box.appendChild(b);
+    if (!seenSessions.has(s.id) && !firstSessionCheck && rc.id !== s.id) {
+      toast(`💻 Volt Code connected: ${s.title.replace(/^Volt Code · /, "")}. Open it from the sidebar.`);
+    }
+    seenSessions.add(s.id);
+  }
+  firstSessionCheck = false;
+}
+async function openSessionFromLink(id) {
+  try {
+    const { sessions } = await api("/api/rc/sessions");
+    const s = sessions.find((x) => x.id === id);
+    if (s) openSession(s); else toast("That Volt Code session has ended.");
+  } catch (err) { toast(err.message); }
+}
 $("rcBack").onclick = closeSession;
 $("rcStop").onclick = () => api(`/api/rc/sessions/${rc.id}/input`, { method: "POST", body: { stop: true } })
   .then(() => toast("Asked Volt Code to stop.")).catch((e) => toast(e.message));
@@ -803,4 +837,7 @@ document.querySelectorAll(".suggestions button").forEach((b) => {
   try { last = (location.hash.match(/chat=([0-9a-f]+)/) || [])[1] || localStorage.getItem("volt.lastChat"); } catch (_) { /* storage blocked */ }
   if (last && state.chats.some((c) => c.id === last)) await openChat(last); else renderMessages();
   setInterval(() => refreshState().catch(() => {}), 10000);
+  refreshCodeSessions(); setInterval(refreshCodeSessions, 4000);
+  const code = (location.hash.match(/code=([0-9a-f]+)/) || [])[1];
+  if (code) openSessionFromLink(code);
 })();

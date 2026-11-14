@@ -49,6 +49,19 @@ def save_config(url: str, token: str) -> None:
     tmp.replace(path)
 
 
+def qr_text(url: str) -> str:
+    """The link as a QR code drawn with text blocks (empty if segno is missing)."""
+    try:
+        import io
+
+        import segno
+    except ImportError:
+        return ""
+    buf = io.StringIO()
+    segno.make(url, error="L").terminal(out=buf, compact=True, border=1)
+    return buf.getvalue()
+
+
 def pair(url: str, password: str, http=None) -> str:
     """Sign in with the phone password; returns the device token."""
     if http is None:
@@ -91,11 +104,23 @@ class RemoteLink:
         if resp.status_code != 200:
             raise RemoteError(f"Volt said no ({resp.status_code}).")
         self.id = resp.json()["id"]
+        self.open_url = self._app_link()
         self.inbox: "queue.Queue[dict]" = queue.Queue()
         self._out: "queue.Queue[dict]" = queue.Queue()
         self._stop = threading.Event()
         threading.Thread(target=self._send_loop, daemon=True).start()
         threading.Thread(target=self._poll_loop, daemon=True).start()
+
+    def _app_link(self) -> str:
+        """Address that opens this session in the Volt app: Tailscale (anywhere),
+        else home Wi-Fi, else the address Volt Code itself uses."""
+        base = self.url
+        try:
+            state = self.http.get(f"{self.url}/api/state", timeout=10).json()
+            base = (state.get("tailscale_url") or state.get("phone_url") or self.url).rstrip("/")
+        except Exception:
+            pass
+        return f"{base}/#code={self.id}"
 
     def emit(self, event: dict) -> None:
         self._out.put(event)
