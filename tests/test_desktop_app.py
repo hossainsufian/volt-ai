@@ -1940,18 +1940,18 @@ class TestListeningWindowVisibility:
         tray.face_window.show.assert_called_once()
         tray.face_window.raise_.assert_called_once()
 
-    def test_launch_flow_wires_launch_windows_after_daemon_start(self):
-        """main() still auto-opens the windows on launch, but through the
-        launch hook rather than inside start_daemon (which stays
-        visibility-neutral)."""
+    def test_launch_flow_opens_the_chat_after_daemon_start(self):
+        """Volt AI opens only the chat at launch (logs and face stay in the tray
+        menu), and only after the daemon auto-start; start_daemon itself stays
+        visibility-neutral."""
         import inspect
         from desktop_app.app import main
 
         source = inspect.getsource(main)
-        show_idx = source.index("show_launch_windows")
+        show_idx = source.index("show_chat()")
         start_idx = source.index("start_daemon")
         assert show_idx > start_idx, (
-            "the launch windows must open after the daemon auto-start"
+            "the chat window must open after the daemon auto-start"
         )
 
 

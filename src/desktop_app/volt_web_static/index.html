@@ -19,6 +19,7 @@
         <button class="icon-btn only-mobile" id="closeSidebar" aria-label="Close menu">✕</button>
       </div>
       <button class="new-chat" id="newChat"><span aria-hidden="true" class="plus">+</span> New chat</button>
+      <input type="search" class="chat-search" id="chatSearch" placeholder="Search chats…" aria-label="Search chats">
       <div class="code-live" id="codeLive" hidden></div>
       <nav class="chat-list" id="chatList"></nav>
       <div class="sidebar-foot">
@@ -103,6 +104,11 @@
   <dialog id="settings" class="sheet">
     <form method="dialog" class="sheet-body">
       <h2>Settings</h2>
+      <div class="toggle">
+        <span aria-hidden="true">🌗</span>
+        <span><strong>Appearance</strong><br>
+        <select id="themeSel" class="chip"><option value="system">Match this device</option><option value="light">Light</option><option value="dark">Dark</option></select></span>
+      </div>
       <label class="toggle">
         <input type="checkbox" id="setImages">
         <span><strong>Create images</strong><br><small>Uses Pollinations.ai. Your image descriptions are sent to their servers.</small></span>

@@ -57,8 +57,21 @@ function renderMarkdown(text) {
     let list = null, para = [];
     const flushPara = () => { if (para.length) { html += `<p>${inline(para.join("<br>"))}</p>`; para = []; } };
     const flushList = () => { if (list) { html += `</${list}>`; list = null; } };
-    for (const line of lines) {
+    const cells = (row) => row.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => inline(c.trim()));
+    for (let li = 0; li < lines.length; li++) {
+      const line = lines[li];
       let m;
+      if (/^\s*\|.*\|\s*$/.test(line) && /^\s*\|?\s*:?-{3,}/.test(lines[li + 1] || "")) {
+        // A markdown table: header row, separator row, then body rows.
+        flushPara(); flushList();
+        html += "<div class=\"table-wrap\"><table><thead><tr>" + cells(line).map((c) => `<th>${c}</th>`).join("") + "</tr></thead><tbody>";
+        li += 2;
+        while (li < lines.length && /^\s*\|.*\|\s*$/.test(lines[li])) {
+          html += "<tr>" + cells(lines[li]).map((c) => `<td>${c}</td>`).join("") + "</tr>"; li++;
+        }
+        li--; html += "</tbody></table></div>";
+        continue;
+      }
       if ((m = line.match(/^(#{1,3})\s+(.*)/))) { flushPara(); flushList(); html += `<h${m[1].length}>${inline(m[2])}</h${m[1].length}>`; }
       else if ((m = line.match(/^\s*[-*]\s+(.*)/))) { flushPara(); if (list !== "ul") { flushList(); html += "<ul>"; list = "ul"; } html += `<li>${inline(m[1])}</li>`; }
       else if ((m = line.match(/^\s*\d+[.)]\s+(.*)/))) { flushPara(); if (list !== "ol") { flushList(); html += "<ol>"; list = "ol"; } html += `<li>${inline(m[1])}</li>`; }
@@ -82,7 +95,8 @@ function groupLabel(ts) {
 function renderChatList() {
   els.list.innerHTML = "";
   let lastGroup = null;
-  for (const chat of state.chats) {
+  const query = ($("chatSearch")?.value || "").trim().toLowerCase();
+  for (const chat of state.chats.filter((c) => !query || c.title.toLowerCase().includes(query))) {
     const g = groupLabel(chat.updated);
     if (g !== lastGroup) {
       const h = document.createElement("div"); h.className = "chat-group"; h.textContent = g;
@@ -92,10 +106,13 @@ function renderChatList() {
     item.className = "chat-item" + (state.current && chat.id === state.current.id ? " active" : "");
     item.setAttribute("role", "button"); item.tabIndex = 0;
     const span = document.createElement("span"); span.textContent = chat.title;
+    const ren = document.createElement("button"); ren.className = "del"; ren.textContent = "✎";
+    ren.title = "Rename chat"; ren.setAttribute("aria-label", `Rename ${chat.title}`);
+    ren.onclick = (e) => { e.stopPropagation(); renameChat(chat); };
     const del = document.createElement("button"); del.className = "del"; del.textContent = "✕";
     del.title = "Delete chat"; del.setAttribute("aria-label", `Delete ${chat.title}`);
     del.onclick = (e) => { e.stopPropagation(); deleteChat(chat); };
-    item.append(span, del);
+    item.append(span, ren, del);
     item.onclick = () => openChat(chat.id);
     item.onkeydown = (e) => { if (e.key === "Enter") openChat(chat.id); };
     els.list.appendChild(item);
@@ -149,9 +166,18 @@ function messageNode(m) {
     const actions = document.createElement("div"); actions.className = "msg-actions";
     const copy = document.createElement("button"); copy.type = "button"; copy.textContent = "Copy";
     copy.onclick = () => copyText(m.text, copy);
-    actions.appendChild(copy); bubble.appendChild(actions);
+    const retry = document.createElement("button"); retry.type = "button"; retry.textContent = "↻ Retry";
+    retry.title = "Answer this again";
+    retry.onclick = () => messageAction(`/api/messages/${m.id}/retry`, {});
+    actions.append(copy, retry); bubble.appendChild(actions);
   } else {
     bubble.textContent = m.text;
+    if (m.status === "done" && !String(m.text || "").startsWith("🎨") && !String(m.text || "").startsWith("✏️")) {
+      const edit = document.createElement("button"); edit.type = "button"; edit.className = "edit-msg";
+      edit.textContent = "✎ Edit"; edit.title = "Edit and send again";
+      edit.onclick = () => startEdit(bubble, m);
+      row.appendChild(edit);
+    }
     const meta = m.meta || {};
     if ((meta.attachments || []).length || (meta.files || []).length) {
       const box = document.createElement("div"); box.className = "msg-attach";
@@ -205,6 +231,21 @@ function messageNode(m) {
   row.appendChild(bubble);
   return row;
 }
+async function messageAction(path, body) {
+  if (busy()) { toast("Wait for the reply to finish first."); return; }
+  try { await api(path, { method: "POST", body }); if (state.current) openChat(state.current.id); }
+  catch (err) { toast(err.message); }
+}
+function startEdit(bubble, m) {
+  const box = document.createElement("div"); box.className = "edit-box";
+  box.innerHTML = '<textarea rows="3"></textarea><div class="msg-actions"><button type="button" class="primary">Save & send</button><button type="button">Cancel</button></div>';
+  const area = box.querySelector("textarea"); area.value = m.text;
+  const [save, cancel] = box.querySelectorAll("button");
+  save.onclick = () => messageAction(`/api/messages/${m.id}/edit`, { text: area.value });
+  cancel.onclick = () => renderMessagesFresh();
+  bubble.replaceChildren(box); area.focus();
+}
+function renderMessagesFresh() { els.messages.innerHTML = ""; renderMessages(); }
 function elapsed(m) { return Math.max(0, Math.round(Date.now() / 1000 - (m.created || Date.now() / 1000))); }
 function messageKey(m) {
   const tick = m.status && m.status.startsWith("pending") && !m.text ? elapsed(m) : "";
@@ -277,6 +318,15 @@ async function ensureChat() {
   if (state.current) return state.current;
   state.current = (await api("/api/chats", { method: "POST" })).chat;
   return state.current;
+}
+async function renameChat(chat) {
+  const title = prompt("Rename chat", chat.title);
+  if (!title || !title.trim() || title.trim() === chat.title) return;
+  try {
+    await api(`/api/chats/${chat.id}`, { method: "PATCH", body: { title: title.trim() } });
+    await loadChats();
+    if (state.current && state.current.id === chat.id) { state.current.title = title.trim(); renderMessages(); }
+  } catch (err) { toast(err.message); }
 }
 async function deleteChat(chat) {
   if (!confirm(`Delete "${chat.title}"? This can't be undone.`)) return;
@@ -806,6 +856,28 @@ $("rcInput").addEventListener("keydown", (e) => {
     e.preventDefault(); $("rcForm").requestSubmit();
   }
 });
+
+// --- Jump to latest, search, theme -----------------------------------------------------
+const jump = document.createElement("button");
+jump.type = "button"; jump.className = "jump-latest"; jump.textContent = "↓"; jump.hidden = true;
+jump.setAttribute("aria-label", "Jump to the latest message");
+jump.onclick = () => els.thread.scrollTo({ top: els.thread.scrollHeight, behavior: "smooth" });
+els.thread.after(jump);
+els.thread.addEventListener("scroll", () => {
+  jump.hidden = els.thread.scrollHeight - els.thread.scrollTop - els.thread.clientHeight < 200;
+});
+$("chatSearch").addEventListener("input", () => renderChatList());
+const THEME_KEY = "volt.theme";
+function applyTheme(choice) {
+  if (choice === "light" || choice === "dark") document.documentElement.dataset.theme = choice;
+  else delete document.documentElement.dataset.theme;
+}
+try { const saved = localStorage.getItem(THEME_KEY) || "system"; $("themeSel").value = saved; applyTheme(saved); } catch (_) { /* private mode */ }
+$("themeSel").onchange = (e) => {
+  applyTheme(e.target.value);
+  try { localStorage.setItem(THEME_KEY, e.target.value); } catch (_) { /* private mode */ }
+};
+$("chatTitle").onclick = () => { if (state.current && state.messages.length) renameChat(state.current); };
 
 // --- Wiring ----------------------------------------------------------------------
 function greet() {

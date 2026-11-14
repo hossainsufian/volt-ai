@@ -375,6 +375,41 @@ class VoltWebServer:
         ).start()
         return {"user": user, "reply": self.store.get_message(pending["id"])}, 200
 
+    def _answer_again(self, chat_id: str) -> tuple[dict, int]:
+        """Answer the chat's last message again (after a retry or an edit)."""
+        brain = self.brain()
+        if brain == "smart":
+            brain = "fast"  # the assistant pipeline keeps its own history; answer directly
+        with self._lock:
+            self._active_chat = None
+            pending = self.store.add_message(chat_id, "assistant", "", status="pending")
+        threading.Thread(target=self._stream_worker, args=(chat_id, pending["id"], brain), daemon=True).start()
+        return {"reply": pending}, 200
+
+    def _retry(self, message_id: int) -> tuple[dict, int]:
+        msg = self.store.get_message(message_id)
+        if not msg or msg["role"] != "assistant" or msg.get("image"):
+            return {"error": "Only an answer can be retried."}, 400
+        if self.store.pending_message() is not None:
+            return {"error": "Volt AI is still answering. Wait for the reply first."}, 409
+        self.store.delete_messages_from(msg["chat_id"], message_id)
+        return self._answer_again(msg["chat_id"])
+
+    def _edit(self, message_id: int, text: str) -> tuple[dict, int]:
+        msg = self.store.get_message(message_id)
+        if not msg or msg["role"] != "user":
+            return {"error": "Only your own messages can be edited."}, 400
+        if not text.strip():
+            return {"error": "The message can't be empty."}, 400
+        if self.store.pending_message() is not None:
+            return {"error": "Volt AI is still answering. Wait for the reply first."}, 409
+        # Keep the message's id (so it stays in place), drop everything after it.
+        self.store.update_message(message_id, text=text.strip()[:20000])
+        later = [m["id"] for m in self.store.messages(msg["chat_id"]) if m["id"] > message_id]
+        if later:
+            self.store.delete_messages_from(msg["chat_id"], later[0])
+        return self._answer_again(msg["chat_id"])
+
     def _stream_worker(self, chat_id: str, message_id: int, brain: str,
                        artifact: bool = False, vector: Optional[str] = None) -> None:
         key = volt_claude.load_key() if brain == "claude" else None
@@ -946,6 +981,19 @@ class VoltWebServer:
                 chat_id, prompt[:1000], style=str(data.get("style", "auto")),
                 shape=str(data.get("shape", "square")), count=count,
                 enhance=bool(data.get("enhance", True)), model=data.get("model"))
+            return jsonify(body), status
+
+        @app.post("/api/messages/<int:message_id>/retry")
+        def retry(message_id):
+            require_auth()
+            body, status = server._retry(message_id)
+            return jsonify(body), status
+
+        @app.post("/api/messages/<int:message_id>/edit")
+        def edit_message(message_id):
+            require_auth()
+            text = str((request.get_json(silent=True) or {}).get("text", ""))
+            body, status = server._edit(message_id, text)
             return jsonify(body), status
 
         @app.post("/api/images/<int:message_id>/again")

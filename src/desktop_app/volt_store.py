@@ -217,6 +217,12 @@ class VoltStore:
             self._db.commit()
         return self.get_message(message_id)
 
+    def delete_messages_from(self, chat_id: str, message_id: int) -> None:
+        """Delete this message and every later one in the chat (retry and edit)."""
+        with self._lock:
+            self._db.execute("DELETE FROM messages WHERE chat_id = ? AND id >= ?", (chat_id, message_id))
+            self._db.commit()
+
     def get_message(self, message_id: int) -> Optional[dict]:
         with self._lock:
             row = self._db.execute(
